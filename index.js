@@ -162,6 +162,7 @@ user.once("loggedOn", async () => {
     const vpkDir = await downloadVPKDir(user, manifest);
     await downloadVPKArchives(user, manifest, vpkDir);
 
+    await execShellCommand("chmod +x ./Decompiler");
     await execShellCommand(
         './Decompiler -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"'
     );
