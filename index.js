@@ -162,14 +162,21 @@ user.once("loggedOn", async () => {
     const vpkDir = await downloadVPKDir(user, manifest);
     await downloadVPKArchives(user, manifest, vpkDir);
 
+    const requiredIndices = getRequiredVPKFiles(vpkDir);
     await execShellCommand("chmod +x ./Decompiler");
-    await execShellCommand(
-        './Decompiler -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"'
-    );
+
+    const commands = requiredIndices.map((archiveIndex) => {
+        const paddedIndex =
+            "0".repeat(3 - archiveIndex.toString().length) + archiveIndex;
+        const fileName = `pak01_${paddedIndex}.vpk`;
+        const command = `./Decompiler -i "./temp/${fileName}" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"`;
+        return execShellCommand(command);
+    });
 
     try {
+        await Promise.all(commands);
         fs.writeFileSync(`${dir}/${manifestIdFile}`, latestManifestId);
-    } catch (err) {
+    } catch (error) {
         throw err;
     }
 
