@@ -38,7 +38,7 @@ function getRequiredVPKFiles(vpkDir) {
                 fileName.startsWith(f) &&
                 (fileName.includes(".vtex_c") || fileName.includes(".txt"))
             ) {
-                console.log(`Found vpk for ${f}: ${fileName}`);
+                // console.log(`Found vpk for ${f}: ${fileName}`);
 
                 const archiveIndex = vpkDir.tree[fileName].archiveIndex;
 
