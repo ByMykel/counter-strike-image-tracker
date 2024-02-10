@@ -19,7 +19,7 @@ jobs:
         - uses: actions/setup-node@v3
         - name: Download new game files
           run: npm install && node index.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}'
-        - name: Run Decompiler for pak01_dir.vpk
+        - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 8.1
           run: |
             chmod +x ./Decompiler
             ./Decompiler -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"
