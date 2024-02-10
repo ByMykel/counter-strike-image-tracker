@@ -55,7 +55,7 @@ function getRequiredVPKFiles(vpkDir) {
 }
 
 async function downloadVPKArchives(user, manifest, vpkDir) {
-    const requiredIndices = [1, 2, 3, 4, 5, 6];
+    const requiredIndices = getRequiredVPKFiles(vpkDir);
 
     console.log(`Required VPK files ${requiredIndices}`);
 
@@ -79,26 +79,6 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
 
         await user.downloadFile(appId, depotId, file, filePath);
     }
-}
-
-/**
- * https://ali-dev.medium.com/how-to-use-promise-with-exec-in-node-js-a39c4d7bbf77
- *
- * Executes a shell command and return it as a Promise.
- * @param cmd {string}
- * @return {Promise<string>}
- */
-function execShellCommand(cmd) {
-    return new Promise((resolve, reject) => {
-        console.log(cmd)
-        exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                console.warn(error);
-            }
-            console.log(stdout ? stdout : stderr)
-            resolve(stdout ? stdout : stderr);
-        });
-    });
 }
 
 if (process.argv.length != 4) {
@@ -163,22 +143,6 @@ user.once("loggedOn", async () => {
 
     const vpkDir = await downloadVPKDir(user, manifest);
     await downloadVPKArchives(user, manifest, vpkDir);
-
-    const requiredIndices = [1, 2, 3, 4, 5, 6];
-    await execShellCommand("chmod +x ./Decompiler");
-
-    for (let index in requiredIndices) {
-        index = parseInt(index);
-        // pad to 3 zeroes
-        const archiveIndex = requiredIndices[index];
-        const paddedIndex =
-            "0".repeat(3 - archiveIndex.toString().length) + archiveIndex;
-        const fileName = `pak01_${paddedIndex}.vpk`;
-
-        await execShellCommand(
-            `./Decompiler -i "./temp/${fileName}" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"`
-        );
-    }
 
     try {
         fs.writeFileSync(`${dir}/${manifestIdFile}`, latestManifestId);
