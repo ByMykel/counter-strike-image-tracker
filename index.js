@@ -90,10 +90,12 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
  */
 function execShellCommand(cmd) {
     return new Promise((resolve, reject) => {
+        console.log(cmd)
         exec(cmd, (error, stdout, stderr) => {
             if (error) {
                 console.warn(error);
             }
+            console.log(stdout ? stdout : stderr)
             resolve(stdout ? stdout : stderr);
         });
     });
