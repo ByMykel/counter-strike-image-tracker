@@ -5,14 +5,25 @@
 const SteamUser = require("steam-user");
 const fs = require("fs");
 const vpk = require("vpk");
-const { exec } = require("child_process");
 const appId = 730;
 const depotId = 2347770;
 const dir = `./static`;
 const temp = "./temp";
 const manifestIdFile = "manifestId.txt";
 
-const vpkFolders = ["panorama/images/econ"];
+const vpkFolders = [
+    "panorama/images/econ/characters",
+    "panorama/images/econ/default_generated",
+    "panorama/images/econ/music_kits",
+    "panorama/images/econ/patches",
+    "panorama/images/econ/season_icons",
+    "panorama/images/econ/set_icons",
+    "panorama/images/econ/status_icons",
+    "panorama/images/econ/stickers",
+    "panorama/images/econ/tools",
+    "panorama/images/econ/weapons",
+    "panorama/images/econ/weapon_cases",
+];
 
 async function downloadVPKDir(user, manifest) {
     const dirFile = manifest.manifest.files.find((file) =>
@@ -33,10 +44,18 @@ function getRequiredVPKFiles(vpkDir) {
     const requiredIndices = [];
 
     for (const fileName of vpkDir.files) {
-        const archiveIndex = vpkDir.tree[fileName].archiveIndex;
+        for (const f of vpkFolders) {
+            if (fileName.startsWith(f)) {
+                console.log(`Found vpk for ${f}: ${fileName}`);
 
-        if (!requiredIndices.includes(archiveIndex)) {
-            requiredIndices.push(archiveIndex);
+                const archiveIndex = vpkDir.tree[fileName].archiveIndex;
+
+                if (!requiredIndices.includes(archiveIndex)) {
+                    requiredIndices.push(archiveIndex);
+                }
+
+                break;
+            }
         }
     }
 
