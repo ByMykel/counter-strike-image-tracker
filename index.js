@@ -33,18 +33,10 @@ function getRequiredVPKFiles(vpkDir) {
     const requiredIndices = [];
 
     for (const fileName of vpkDir.files) {
-        for (const f of vpkFolders) {
-            if (fileName.startsWith(f)) {
-                // console.log(`Found vpk for ${f}: ${fileName}`);
+        const archiveIndex = vpkDir.tree[fileName].archiveIndex;
 
-                const archiveIndex = vpkDir.tree[fileName].archiveIndex;
-
-                if (!requiredIndices.includes(archiveIndex)) {
-                    requiredIndices.push(archiveIndex);
-                }
-
-                break;
-            }
+        if (!requiredIndices.includes(archiveIndex)) {
+            requiredIndices.push(archiveIndex);
         }
     }
 
