@@ -34,10 +34,7 @@ function getRequiredVPKFiles(vpkDir) {
 
     for (const fileName of vpkDir.files) {
         for (const f of vpkFolders) {
-            if (
-                fileName.startsWith(f) &&
-                (fileName.includes(".vtex_c") || fileName.includes(".txt"))
-            ) {
+            if (fileName.startsWith(f)) {
                 // console.log(`Found vpk for ${f}: ${fileName}`);
 
                 const archiveIndex = vpkDir.tree[fileName].archiveIndex;
@@ -51,7 +48,7 @@ function getRequiredVPKFiles(vpkDir) {
         }
     }
 
-    return requiredIndices.sort();
+    return requiredIndices.sort((a, b) => a - b);
 }
 
 async function downloadVPKArchives(user, manifest, vpkDir) {
