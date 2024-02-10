@@ -41,7 +41,8 @@ async function downloadVPKDir(user, manifest) {
 }
 
 function getRequiredVPKFiles(vpkDir) {
-    const requiredIndices = [];
+    // Hardcode some files
+    const requiredIndices = [152, 169];
 
     for (const fileName of vpkDir.files) {
         for (const f of vpkFolders) {
