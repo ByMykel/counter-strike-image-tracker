@@ -55,7 +55,7 @@ function getRequiredVPKFiles(vpkDir) {
 }
 
 async function downloadVPKArchives(user, manifest, vpkDir) {
-    const requiredIndices = getRequiredVPKFiles(vpkDir);
+    const requiredIndices = [1, 2, 3, 4, 5, 6];
 
     console.log(`Required VPK files ${requiredIndices}`);
 
@@ -159,8 +159,8 @@ user.once("loggedOn", async () => {
         "public"
     );
 
-    // const vpkDir = await downloadVPKDir(user, manifest);
-    // await downloadVPKArchives(user, manifest, vpkDir);
+    const vpkDir = await downloadVPKDir(user, manifest);
+    await downloadVPKArchives(user, manifest, vpkDir);
 
     const requiredIndices = [1, 2, 3, 4, 5, 6];
     await execShellCommand("chmod +x ./Decompiler");
