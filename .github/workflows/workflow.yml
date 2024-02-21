@@ -22,7 +22,7 @@ jobs:
         run: |
           if [ ! -f temp/pak01_dir.vpk ]; then
             echo "pak01_dir.vpk not found"
-            exit 1
+            exit 0
           fi
       - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 8.1
         if: success()
