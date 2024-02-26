@@ -21,8 +21,12 @@ jobs:
               run: npm install && node index.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}'
             - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 8.1
               run: |
-                  chmod +x ./Decompiler
-                  ./Decompiler -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"
+                  if [ -f "./temp/pak01_dir.vpk" ]; then
+                    chmod +x ./Decompiler
+                    ./Decompiler -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"
+                  else
+                    echo "pak01_dir.vpk not found, skipping decompilation"
+                  fi
             - name: Read manifestId.txt
               id: manifestId
               uses: juliangruber/read-file-action@v1
