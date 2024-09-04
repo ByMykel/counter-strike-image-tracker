@@ -22560,3 +22560,36 @@ File name: '/home/runner/work/counter-strike-image-tracker/counter-strike-image-
    at SteamDatabase.ValvePak.Package.ReadEntry(PackageEntry entry, Byte[] output, Boolean validateCrc) in /home/runner/work/ValvePak/ValvePak/ValvePak/ValvePak/Package.Read.cs:line 135
    at Decompiler.Decompiler.DumpVPK(String parentPath, Package package, String type, Dictionary`2 manifestData) in /home/runner/work/ValveResourceFormat/ValveResourceFormat/Decompiler/Decompiler.cs:line 944
 
+---------------
+Parent file: /home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_dir.vpk
+File: panorama/images/econ/coupon/offer_png.vtex_c
+Exception: System.IO.FileNotFoundException: Could not find file '/home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_169.vpk'.
+File name: '/home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_169.vpk'
+   at Interop.ThrowExceptionForIoErrno(ErrorInfo errorInfo, String path, Boolean isDirError)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, UnixFileMode openPermissions, Int64& fileLength, UnixFileMode& filePermissions, Boolean failForSymlink, Boolean& wasSymlink, Func`4 createOpenException)
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at SteamDatabase.ValvePak.Package.ReadEntry(PackageEntry entry, Byte[] output, Boolean validateCrc) in /home/runner/work/ValvePak/ValvePak/ValvePak/ValvePak/Package.Read.cs:line 135
+   at Decompiler.Decompiler.DumpVPK(String parentPath, Package package, String type, Dictionary`2 manifestData) in /home/runner/work/ValveResourceFormat/ValveResourceFormat/Decompiler/Decompiler.cs:line 944
+
+---------------
+Parent file: /home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_dir.vpk
+File: panorama/images/econ/wearables/gloves/ct_defaultgloves_png.vtex_c
+Exception: System.IO.FileNotFoundException: Could not find file '/home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_152.vpk'.
+File name: '/home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_152.vpk'
+   at Interop.ThrowExceptionForIoErrno(ErrorInfo errorInfo, String path, Boolean isDirError)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, UnixFileMode openPermissions, Int64& fileLength, UnixFileMode& filePermissions, Boolean failForSymlink, Boolean& wasSymlink, Func`4 createOpenException)
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at SteamDatabase.ValvePak.Package.ReadEntry(PackageEntry entry, Byte[] output, Boolean validateCrc) in /home/runner/work/ValvePak/ValvePak/ValvePak/ValvePak/Package.Read.cs:line 135
+   at Decompiler.Decompiler.DumpVPK(String parentPath, Package package, String type, Dictionary`2 manifestData) in /home/runner/work/ValveResourceFormat/ValveResourceFormat/Decompiler/Decompiler.cs:line 944
+
+---------------
+Parent file: /home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_dir.vpk
+File: panorama/images/econ/wearables/gloves/t_defaultgloves_png.vtex_c
+Exception: System.IO.FileNotFoundException: Could not find file '/home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_152.vpk'.
+File name: '/home/runner/work/counter-strike-image-tracker/counter-strike-image-tracker/temp/pak01_152.vpk'
+   at Interop.ThrowExceptionForIoErrno(ErrorInfo errorInfo, String path, Boolean isDirError)
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, UnixFileMode openPermissions, Int64& fileLength, UnixFileMode& filePermissions, Boolean failForSymlink, Boolean& wasSymlink, Func`4 createOpenException)
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)
+   at SteamDatabase.ValvePak.Package.ReadEntry(PackageEntry entry, Byte[] output, Boolean validateCrc) in /home/runner/work/ValvePak/ValvePak/ValvePak/ValvePak/Package.Read.cs:line 135
+   at Decompiler.Decompiler.DumpVPK(String parentPath, Package package, String type, Dictionary`2 manifestData) in /home/runner/work/ValveResourceFormat/ValveResourceFormat/Decompiler/Decompiler.cs:line 944
+
