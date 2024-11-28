@@ -6,6 +6,7 @@ WORKDIR /app
 
 # 安装所需的工具和依赖
 RUN apt-get update && apt-get install -y \
+    libicu-dev \
     curl \
     wget \
     vim \
