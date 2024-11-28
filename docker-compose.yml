@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  decompiler:
+    build: .
+    volumes:
+      - ./temp:/app/temp    # 将本地的 temp 目录挂载到容器的 /app/temp 目录
+      - ./static:/app/static  # 将本地的 static 目录挂载到容器的 /app/static 目录
+    environment:
+      - DECOMPILER_PATH=/app/Decompiler   # 这里可以设置环境变量，指向 Decompiler 程序的路径
+    command: bash /app/decompile.sh   # 运行脚本
