@@ -12,6 +12,7 @@ const temp = "./temp";
 const manifestIdFile = "manifestId.txt";
 
 const vpkFolders = [
+    "panorama/images/backgrounds/xpshop",
     "panorama/images/econ/characters",
     "panorama/images/econ/default_generated",
     "panorama/images/econ/music_kits",
