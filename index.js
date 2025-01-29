@@ -24,6 +24,7 @@ const vpkFolders = [
     "panorama/images/econ/weapons",
     "panorama/images/econ/weapon_cases",
     "panorama/images/econ/tournaments",
+    "panorama/images/econ/premier_seasons",
 ];
 
 async function downloadVPKDir(user, manifest) {
