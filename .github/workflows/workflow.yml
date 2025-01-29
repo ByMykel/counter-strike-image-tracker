@@ -19,11 +19,12 @@ jobs:
             - uses: actions/setup-node@v3
             - name: Download new game files
               run: npm install && node index.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}'
-            - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 8.1
+            - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 11.1
               run: |
                   if [ -f "./temp/pak01_dir.vpk" ]; then
-                    chmod +x ./Decompiler
-                    ./Decompiler -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"
+                    rm -fr ./exceptions.txt
+                    chmod +x ./Source2Viewer-CLI
+                    ./Source2Viewer-CLI -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"
                   else
                     echo "pak01_dir.vpk not found, skipping decompilation"
                   fi
