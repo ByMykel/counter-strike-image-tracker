@@ -57,7 +57,7 @@ function getRequiredVPKFiles(vpkDir) {
     for (const fileName of vpkDir.files) {
         for (const f of vpkFolders) {
             if (fileName.startsWith(f)) {
-                console.log(`Found vpk for ${f}: ${fileName}`);
+                // console.log(`Found vpk for ${f}: ${fileName}`);
 
                 const archiveIndex = vpkDir.tree[fileName].archiveIndex;
 
@@ -80,7 +80,7 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
     }
 
     const requiredIndices = getRequiredVPKFiles(vpkDir);
-    console.log(`Required VPK files: ${requiredIndices}`);
+    // console.log(`Required VPK files: ${requiredIndices}`);
 
     for (let index = 0; index < requiredIndices.length; index++) {
         const archiveIndex = requiredIndices[index];
