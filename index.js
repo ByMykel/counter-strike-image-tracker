@@ -163,7 +163,7 @@ user.once("loggedOn", async () => {
         }
     }
 
-    if (existingManifestId === latestManifestId) {
+    if (existingManifestId == latestManifestId) {
         console.log("⚠️ Latest manifest ID matches existing manifest ID, exiting.");
         process.exit(0);
     }
