@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "steam-totp": "^2.1.2",
-    "steam-user": "^5.0.1",
+    "steam-user": "^5.2.0",
     "vpk": "^0.2.0"
   }
 }
