@@ -3,6 +3,8 @@
  * https://github.com/csfloat/cs-files/blob/5ff0f212ff0dc2b6f6380fc6d1a93121c2b9c2cd/index.js
  */
 const SteamUser = require("steam-user");
+const SteamTotp = require('steam-totp')
+
 const fs = require("fs");
 const vpk = require("vpk");
 const appId = 730;
@@ -89,7 +91,7 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
     }
 }
 
-if (process.argv.length != 4) {
+if (process.argv.length < 4) {
     console.error(
         `Missing input arguments, expected 4 got ${process.argv.length}`
     );
@@ -107,10 +109,14 @@ if (!fs.existsSync(temp)) {
 const user = new SteamUser();
 
 console.log("Logging into Steam....");
-
+let twoFactorCode = null
+if (process.argv[4]) {
+    twoFactorCode = SteamTotp.getAuthCode(process.argv[4])
+}
 user.logOn({
     accountName: process.argv[2],
     password: process.argv[3],
+    twoFactorCode: twoFactorCode,
     rememberPassword: true,
     logonID: 2121,
 });
