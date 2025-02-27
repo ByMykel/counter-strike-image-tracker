@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 
 # 复制你的脚本到容器内
 COPY ./libSkiaSharp.so /app/libSkiaSharp.so
-COPY ./Decompiler /app/Decompiler
+COPY ./Source2Viewer-CLI /app/Decompiler
 COPY ./decompile.sh /app/decompile.sh
 RUN chmod +x /app/decompile.sh
 
