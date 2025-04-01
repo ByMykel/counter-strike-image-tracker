@@ -28,6 +28,8 @@ jobs:
                   else
                     echo "pak01_dir.vpk not found, skipping decompilation"
                   fi
+            - name: Generate default_generated.json
+              run: node list.js
             - name: Read manifestId.txt
               id: manifestId
               uses: juliangruber/read-file-action@v1
