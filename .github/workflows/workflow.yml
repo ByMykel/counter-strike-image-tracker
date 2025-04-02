@@ -2,8 +2,8 @@ name: Download CS Game Files
 
 on:
   schedule:
-    - cron: "30 0 * * *" # UTC 00:00  -> 北京时间 08:00
-    - cron: "30 1 * * *" # UTC 00:00  -> 北京时间 09:00
+    - cron: "30 0 * * *" # UTC 00:00  -> 北京时间 08:30
+    - cron: "0 8 * * *" # UTC 00:00  -> 北京时间 16:00
 
   workflow_dispatch:
 
