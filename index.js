@@ -131,9 +131,16 @@ const user = new SteamUser();
 
 console.log("Logging into Steam....");
 let twoFactorCode = null
+let forceUpdate = false
 if (process.argv[4]) {
     twoFactorCode = SteamTotp.getAuthCode(process.argv[4])
 }
+if (process.argv[5]) {
+    forceUpdate = process.argv[5]=='force'
+    console.log(`📦 forceUpdate ${forceUpdate}`);
+
+}
+
 user.logOn({
     accountName: process.argv[2],
     password: process.argv[3],
@@ -169,7 +176,7 @@ user.once("loggedOn", async () => {
         }
     }
 
-    if (existingManifestId == latestManifestId) {
+    if (!forceUpdate&&existingManifestId == latestManifestId) {
         console.log("⚠️ Latest manifest ID matches existing manifest ID, exiting.");
         process.exit(0);
     }
