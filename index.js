@@ -41,7 +41,7 @@ async function downloadVPKDir(user, manifest) {
     try {
         await user.downloadFile(appId, depotId, dirFile, `${temp}/pak01_dir.vpk`);
     } catch (error) {
-        console.error(`❌ Failed to download pak01_dir.vpk: ${error.message}`);
+        console.error(`❌ Failed to download pak01_dir.vpk: ${error}`);
         return null; // Return null to handle failure gracefully
     }
 
@@ -102,7 +102,7 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
             await user.downloadFile(appId, depotId, file, filePath);
             console.log(`✅ Successfully downloaded ${fileName}`);
         } catch (error) {
-            console.error(`❌ Failed to download ${fileName}: ${error.message}`);
+            console.error(`❌ Failed to download ${fileName}: ${error}`);
         }
 
         // Add a delay of 3 seconds between downloads to avoid rate limiting
@@ -110,9 +110,9 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
     }
 }
 
-if (process.argv.length != 4) {
+if (process.argv.length != 4 && process.argv.length != 5) {
     console.error(
-        `Missing input arguments, expected 4 got ${process.argv.length}`
+        `Missing input arguments, expected 4 or 5 got ${process.argv.length}`
     );
     process.exit(1);
 }
@@ -163,12 +163,12 @@ user.once("loggedOn", async () => {
         }
     }
 
-    if (existingManifestId == latestManifestId) {
+    if (existingManifestId == latestManifestId && process.argv[4] !== '--force') {
         console.log("⚠️ Latest manifest ID matches existing manifest ID, exiting.");
         process.exit(0);
     }
 
-    console.log("🔄 Manifest ID changed, downloading new files...");
+    console.log("🔄 Manifest ID changed or force flag used, downloading new files...");
 
     let manifest;
     try {
