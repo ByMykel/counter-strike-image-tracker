@@ -102,7 +102,12 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
             await user.downloadFile(appId, depotId, file, filePath);
             console.log(`✅ Successfully downloaded ${fileName}`);
         } catch (error) {
-            console.error(`❌ Failed to download ${fileName}: ${error}`);
+            if (error instanceof AggregateError) {
+                console.error(`❌ Failed to download ${fileName}:`);
+                error.errors.forEach(e => console.error(`  - ${e.message}`));
+            } else {
+                console.error(`❌ Failed to download ${fileName}: ${error}`);
+            }
         }
 
         // Add a delay of 3 seconds between downloads to avoid rate limiting
