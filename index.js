@@ -87,8 +87,8 @@ async function downloadWithRetry(user, appId, depotId, file, filePath, maxRetrie
             if (attempt === maxRetries) {
                 throw error;
             }
-            const backoffTime = Math.min(1000 * Math.pow(2, attempt), 30000);
-            console.log(`⚠️ Download failed, retrying in ${backoffTime/1000}s (attempt ${attempt}/${maxRetries})`);
+            const backoffTime = Math.min(60000 * Math.pow(2, attempt - 1), 300000); // 1min, 2min, 4min, max 5min
+            console.log(`⚠️ Download failed, retrying in ${backoffTime/60000} minutes (attempt ${attempt}/${maxRetries})`);
             await delay(backoffTime);
         }
     }
