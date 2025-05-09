@@ -78,6 +78,22 @@ function getRequiredVPKFiles(vpkDir) {
     return requiredIndices.sort((a, b) => a - b);
 }
 
+async function downloadWithRetry(user, appId, depotId, file, filePath, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            await user.downloadFile(appId, depotId, file, filePath);
+            return true;
+        } catch (error) {
+            if (attempt === maxRetries) {
+                throw error;
+            }
+            const backoffTime = Math.min(1000 * Math.pow(2, attempt), 30000);
+            console.log(`⚠️ Download failed, retrying in ${backoffTime/1000}s (attempt ${attempt}/${maxRetries})`);
+            await delay(backoffTime);
+        }
+    }
+}
+
 async function downloadVPKArchives(user, manifest, vpkDir) {
     if (!vpkDir) {
         console.error("⚠️ Skipping VPK archive downloads due to previous failure.");
@@ -85,12 +101,10 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
     }
 
     const requiredIndices = getRequiredVPKFiles(vpkDir);
-    // console.log(`Required VPK files: ${requiredIndices}`);
+    const failedDownloads = [];
 
     for (let index = 0; index < requiredIndices.length; index++) {
         const archiveIndex = requiredIndices[index];
-
-        // Pad index with zeroes (e.g., 001, 002)
         const paddedIndex = archiveIndex.toString().padStart(3, "0");
         const fileName = `pak01_${paddedIndex}.vpk`;
 
@@ -100,11 +114,10 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
         const filePath = `${temp}/${fileName}`;
 
         const status = `[${index + 1}/${requiredIndices.length}]`;
-
         console.log(`${status} Downloading ${fileName}`);
 
         try {
-            await user.downloadFile(appId, depotId, file, filePath);
+            await downloadWithRetry(user, appId, depotId, file, filePath);
             console.log(`✅ Successfully downloaded ${fileName}`);
         } catch (error) {
             if (error instanceof AggregateError) {
@@ -113,10 +126,16 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
             } else {
                 console.error(`❌ Failed to download ${fileName}: ${error}`);
             }
+            failedDownloads.push(fileName);
         }
 
-        // Add a delay of 3 seconds between downloads to avoid rate limiting
-        await delay(3000);
+        // Increased delay between downloads to 5 seconds
+        await delay(5000);
+    }
+
+    if (failedDownloads.length > 0) {
+        console.log("\n⚠️ The following files failed to download:");
+        failedDownloads.forEach(file => console.log(`  - ${file}`));
     }
 }
 
