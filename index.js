@@ -41,7 +41,12 @@ async function downloadVPKDir(user, manifest) {
     try {
         await user.downloadFile(appId, depotId, dirFile, `${temp}/pak01_dir.vpk`);
     } catch (error) {
-        console.error(`❌ Failed to download pak01_dir.vpk: ${error}`);
+        if (error instanceof AggregateError) {
+            console.error(`❌ Failed to download pak01_dir.vpk: Multiple errors occurred`);
+            error.errors.forEach(e => console.error(e));
+        } else {
+            console.error(`❌ Failed to download pak01_dir.vpk: ${error}`);
+        }
         return null; // Return null to handle failure gracefully
     }
 
