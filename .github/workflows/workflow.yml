@@ -1,4 +1,4 @@
-name: Download CS Game Files
+name: Download CS Images
 
 on:
   schedule:
