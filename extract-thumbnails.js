@@ -34,8 +34,6 @@ async function extractThumbnails() {
             { url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/zh-CN/highlights.json', suffix: '_cn' }
         ];
         
-        let allResults = [];
-        
         for (const { url, suffix } of languageUrls) {
             console.log(`\nProcessing ${suffix === '_ww' ? 'English' : 'Chinese'} highlights...`);
             
@@ -76,46 +74,19 @@ async function extractThumbnails() {
                             extractedAt: new Date().toISOString()
                         };
                         
-                        allResults.push(result);
-                        
                     } catch (error) {
                         console.error(`Error processing ${highlight.name} (${suffix}):`, error.message);
-                        allResults.push({
-                            ...highlight,
-                            language: suffix === '_ww' ? 'en' : 'zh-CN',
-                            languageSuffix: suffix,
-                            error: error.message,
-                            extractedAt: new Date().toISOString()
-                        });
                     }
                 }
                 
             } catch (error) {
                 console.error(`Error fetching ${suffix === '_ww' ? 'English' : 'Chinese'} highlights:`, error.message);
-                allResults.push({
-                    language: suffix === '_ww' ? 'en' : 'zh-CN',
-                    languageSuffix: suffix,
-                    error: `Failed to fetch API: ${error.message}`,
-                    extractedAt: new Date().toISOString()
-                });
             }
         }
-        
-        // Save results to JSON file
-        const resultsPath = 'highlights-thumbnails.json';
-        fs.writeFileSync(resultsPath, JSON.stringify(allResults, null, 2));
         
         console.log(`\n${'='.repeat(60)}`);
         console.log(`Thumbnail extraction complete!`);
         console.log(`${'='.repeat(60)}`);
-        console.log(`Total highlights processed: ${allResults.filter(r => !r.error).length}`);
-        console.log(`Errors: ${allResults.filter(r => r.error).length}`);
-        console.log(`Images saved to:`);
-        console.log(`  - static/highlightreels/[FolderName]/ (with _ww/_cn suffixes)`);
-        console.log(`Summary saved to: ${resultsPath}`);
-        
-        return allResults;
-        
     } catch (error) {
         console.error('Error in extraction process:', error);
         throw error;
