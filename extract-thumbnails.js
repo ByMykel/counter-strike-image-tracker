@@ -65,6 +65,9 @@ async function extractThumbnails() {
                         // Extract frame at 3 seconds
                         await extractVideoFrame(highlight.video, outputPath, 3.0);
                         
+                        // Small delay between videos to prevent overwhelming system
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        
                         const result = {
                             ...highlight,
                             language: suffix === '_ww' ? 'en' : 'zh-CN',
@@ -121,16 +124,33 @@ async function extractThumbnails() {
 
 function extractVideoFrame(videoUrl, outputPath, timeInSeconds) {
     return new Promise((resolve, reject) => {
-        ffmpeg(videoUrl)
+        // Add timeout and memory safety options
+        const timeout = 30000; // 30 seconds timeout
+        
+        const command = ffmpeg(videoUrl)
             .seekInput(timeInSeconds)
             .frames(1)
             .output(outputPath)
-            .outputOptions(['-q:v', '2']) // High quality
+            .outputOptions([
+                '-q:v', '2', // High quality
+                '-t', '1', // Limit output duration to 1 second
+                '-threads', '2' // Limit threads to prevent memory issues
+            ]);
+        
+        // Set timeout
+        const timer = setTimeout(() => {
+            command.kill('SIGTERM');
+            reject(new Error('Video processing timeout'));
+        }, timeout);
+        
+        command
             .on('end', () => {
+                clearTimeout(timer);
                 console.log(`  Frame extracted: ${outputPath}`);
                 resolve();
             })
             .on('error', (err) => {
+                clearTimeout(timer);
                 reject(err);
             })
             .run();
