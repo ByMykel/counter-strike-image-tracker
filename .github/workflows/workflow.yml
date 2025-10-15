@@ -11,6 +11,11 @@ on:
         required: false
         default: false
         type: boolean
+      ignore_manifest_diff:
+        description: "Ignore manifest diff"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,7 +37,7 @@ jobs:
           git config --global user.email "actions@github.com"
           git pull origin main
       - name: Download new game files
-        run: npm install && node index.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.force && '--force' || '' }}
+        run: npm install && node index.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.force && '--force' || inputs.ignore_manifest_diff && '--ignore-manifest-diff' || '' }}
       - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 11.1
         run: |
           if [ -f "./temp/pak01_dir.vpk" ]; then
