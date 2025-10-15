@@ -148,6 +148,7 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
 async function getChangedFiles(manifest) {
     try {
         fileShaContent = JSON.parse(await fs.promises.readFile(`${dir}/fileSha.json`, 'utf8')) || {};
+        fileShaContentUpdated = { ...fileShaContent };
     } catch (err) {
         console.error(`❌ Error reading fileSha.json: ${err.message}`);
     }
