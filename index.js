@@ -56,10 +56,21 @@ async function downloadVPKDir(user, manifest) {
     return vpkDir;
 }
 
-function getRequiredVPKFiles(vpkDir) {
+function getRequiredVPKFiles(vpkDir, manifest) {
     const requiredIndices = [];
 
+    const updatedFiles = manifest.manifest.files.reduce((acc, file) => {
+        const filename = file.filename.replace(/\\/g, "/");
+        if (!(filename in acc)) {
+            acc[filename] = true;
+        }
+        return acc;
+    }, {});
+
     for (const fileName of vpkDir.files) {
+        if (!updatedFiles[`game/csgo/${fileName}`]) {
+            continue;
+        }
         for (const f of vpkFolders) {
             if (fileName.startsWith(f)) {
                 // console.log(`Found vpk for ${f}: ${fileName}`);
@@ -100,7 +111,7 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
         return;
     }
 
-    const requiredIndices = getRequiredVPKFiles(vpkDir);
+    const requiredIndices = getRequiredVPKFiles(vpkDir, manifest);
     const failedDownloads = [];
 
     for (let index = 0; index < requiredIndices.length; index++) {
