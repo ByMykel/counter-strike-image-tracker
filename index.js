@@ -13,6 +13,10 @@ const dir = `./static`;
 const temp = "./temp";
 const manifestIdFile = "manifestId.txt";
 
+let fileShaContent = {};
+let fileShaContentUpdated = {};
+let fileShaContentDiff = {};
+
 const vpkFolders = [
     "panorama/images/econ/characters",
     "panorama/images/econ/default_generated",
@@ -56,28 +60,19 @@ async function downloadVPKDir(user, manifest) {
     return vpkDir;
 }
 
-function getRequiredVPKFiles(vpkDir, manifest) {
+function getRequiredVPKFiles(vpkDir) {
     const requiredIndices = [];
 
-    const updatedFiles = manifest.manifest.files.reduce((acc, file) => {
-        const filename = file.filename.replace(/\\/g, "/");
-        if (!(filename in acc)) {
-            acc[filename] = true;
-        }
-        return acc;
-    }, {});
-
     for (const fileName of vpkDir.files) {
-        if (!updatedFiles[`game/csgo/${fileName}`]) {
-            continue;
-        }
         for (const f of vpkFolders) {
             if (fileName.startsWith(f)) {
                 // console.log(`Found vpk for ${f}: ${fileName}`);
 
                 const archiveIndex = vpkDir.tree[fileName].archiveIndex;
 
-                if (!requiredIndices.includes(archiveIndex)) {
+                const fileShaIsDifferent = fileShaContentDiff[archiveIndex.toString().padStart(3, "0")] || process.argv[4] === '--ignore-manifest-diff';
+
+                if (!requiredIndices.includes(archiveIndex) && fileShaIsDifferent) {
                     requiredIndices.push(archiveIndex);
                 }
 
@@ -111,7 +106,7 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
         return;
     }
 
-    const requiredIndices = getRequiredVPKFiles(vpkDir, manifest);
+    const requiredIndices = getRequiredVPKFiles(vpkDir);
     const failedDownloads = [];
 
     for (let index = 0; index < requiredIndices.length; index++) {
@@ -147,6 +142,28 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
     if (failedDownloads.length > 0) {
         console.log("\n⚠️ The following files failed to download:");
         failedDownloads.forEach(file => console.log(`  - ${file}`));
+    }
+}
+
+async function getChangedFiles(manifest) {
+    try {
+        fileShaContent = JSON.parse(await fs.promises.readFile(`${dir}/fileSha.json`, 'utf8')) || {};
+    } catch (err) {
+        console.error(`❌ Error reading fileSha.json: ${err.message}`);
+    }
+
+    manifest.manifest.files.filter((file) => file.filename.startsWith("game\\csgo\\pak01_")).forEach((file) => {
+        const vpkIndex = file.filename.replace('game\\csgo\\pak01_', '').replace('.vpk', '');
+
+        if (!['dir'].includes(vpkIndex)) {
+            fileShaContentUpdated[vpkIndex] = file.sha_content;
+        }
+    });
+
+    for (const key in fileShaContentUpdated) {
+        if (fileShaContentUpdated[key] !== fileShaContent[key]) {
+            fileShaContentDiff[key] = fileShaContentUpdated[key];
+        }
     }
 }
 
@@ -203,7 +220,7 @@ user.once("loggedOn", async () => {
         }
     }
 
-    if (existingManifestId == latestManifestId && process.argv[4] !== '--force') {
+    if (existingManifestId == latestManifestId && process.argv[4] !== '--force' && process.argv[4] !== '--ignore-manifest-diff') {
         console.log("⚠️ Latest manifest ID matches existing manifest ID, exiting.");
         process.exit(0);
     }
@@ -218,11 +235,14 @@ user.once("loggedOn", async () => {
         process.exit(1);
     }
 
+    await getChangedFiles(manifest);
+
     const vpkDir = await downloadVPKDir(user, manifest);
     await downloadVPKArchives(user, manifest, vpkDir);
 
     try {
         fs.writeFileSync(`${dir}/${manifestIdFile}`, latestManifestId);
+        fs.writeFileSync(`${dir}/fileSha.json`, JSON.stringify(fileShaContentUpdated, null, 2));
         console.log("✅ Updated manifest ID file.");
     } catch (error) {
         console.error(`❌ Failed to write manifest ID file: ${error.message}`);
