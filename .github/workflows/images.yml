@@ -1,4 +1,4 @@
-name: Counter-Strike Image Processing
+name: Update CDN images
 
 on:
   workflow_dispatch:
@@ -6,6 +6,9 @@ on:
 jobs:
   process-images:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout repository
@@ -26,10 +29,7 @@ jobs:
       # - name: Cleanup processed images
       #   run: node cleanup-images.js
         
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .
-          git diff --staged --quiet || git commit -m "Update CDN images"
-          git push
+      - name: Commit & push changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Update CDN images"
