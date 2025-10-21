@@ -55,7 +55,7 @@ community.login(
 					(item) =>
 						!existingImageUrls[item[0]] &&
 						!existingImageUrlsByImageInventory[item[1]]
-				).slice(0, 2);
+				)
 			console.log(`Need to fetch ${itemsToProcess.length} new image URLs`);
 
 			if (itemsToProcess.length > 0) {
