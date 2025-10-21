@@ -5,6 +5,7 @@
     "node-fetch": "^3.3.2",
     "sharp": "^0.34.4",
     "steam-user": "^5.2.3",
+    "steamcommunity": "^3.49.0",
     "vpk": "^0.2.0"
   }
 }

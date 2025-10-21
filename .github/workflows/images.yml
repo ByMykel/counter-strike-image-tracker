@@ -1,0 +1,35 @@
+name: Counter-Strike Image Processing
+
+on:
+  workflow_dispatch:
+
+jobs:
+  process-images:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Generate image URL mappings
+        run: node images.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}'
+        
+      # - name: Cleanup processed images
+      #   run: node cleanup-images.js
+        
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git diff --staged --quiet || git commit -m "Update CDN images"
+          git push
