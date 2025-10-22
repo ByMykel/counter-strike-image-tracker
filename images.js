@@ -53,7 +53,7 @@ community.login(
 			const itemsToProcess = items
 				.filter(
 					(item) =>
-						!existingImageUrls[item[0]] &&
+						!existingImageUrls[item[0]] ||
 						!existingImageUrlsByImageInventory[item[1]]
 				)
 			console.log(`Need to fetch ${itemsToProcess.length} new image URLs`);
@@ -278,7 +278,7 @@ async function processBatch(batch) {
 }
 
 async function processItems(items, batchSize = 1) {
-	const requestsPerMinute = 10;
+	const requestsPerMinute = 12;
 	const delayPerBatch = (60 / requestsPerMinute) * batchSize * 1000;
 
 	for (let i = 0; i < items.length; i += batchSize) {
