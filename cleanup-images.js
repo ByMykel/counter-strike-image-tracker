@@ -19,6 +19,7 @@ async function cleanupImages() {
         
         // Process each image
         for (const [imageKey, imageUrl] of Object.entries(inventoryData)) {
+            if (imageUrl === null) continue;
             try {
                 // Add to .gitignore if not already there
                 const gitignorePattern = `static/panorama/images/${imageKey}_png.png`;
