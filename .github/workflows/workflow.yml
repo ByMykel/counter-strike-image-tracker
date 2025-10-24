@@ -41,9 +41,9 @@ jobs:
       - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 11.1
         run: |
           if [ -f "./temp/pak01_dir.vpk" ]; then
-            rm -fr ./exceptions.txt
-            chmod +x ./Source2Viewer-CLI
-            ./Source2Viewer-CLI -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ"
+            chmod +x ./source2viewer/Source2Viewer-CLI
+            ./source2viewer/Source2Viewer-CLI -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c" -d -f "panorama/images/econ" 2>/dev/null || true
+            rm -f ./exceptions.txt
           else
             echo "pak01_dir.vpk not found, skipping decompilation"
           fi
@@ -58,3 +58,5 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "manifest ${{ steps.manifestId.outputs.content }}"
+      - name: Cleanup temp directory
+        run: rm -rf ./temp

@@ -3,8 +3,8 @@ const path = require('path');
 
 async function cleanupImages() {
     try {
-        // Read images_inventory.json
-        const inventoryPath = path.join(__dirname, 'static', 'images_inventory.json');
+        // Read images.json
+        const inventoryPath = path.join(__dirname, 'static', 'images.json');
         const inventoryData = JSON.parse(fs.readFileSync(inventoryPath, 'utf8'));
         
         // Read current .gitignore
