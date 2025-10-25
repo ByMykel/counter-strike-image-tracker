@@ -28,6 +28,9 @@ jobs:
         
       - name: Generate image URL mappings
         run: node scrape-cdn-images.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}'
+
+      - name: Generate CDN images
+        run: node generate-cdn-images.js
         
       # - name: Cleanup processed images
       #   run: node cleanup-images.js
