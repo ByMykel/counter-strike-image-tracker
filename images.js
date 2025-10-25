@@ -8,7 +8,7 @@ const CONFIG = {
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
 	MARKET_BASE_URL: "https://steamcommunity.com/market",
 	MAX_DURATION: 3600 * 1000 * 5.5, // 5.5 hours
-	DELAY_PER_ITEM: 3 * 1000, // 3 seconds
+	DELAY_PER_ITEM: 4 * 1000, // 4 seconds
 	REQUIRED_ARGS: 4,
 	STEAM_APP_ID: 730,
 	OUTPUT_FILE: "images.json"
