@@ -134,6 +134,9 @@ class ImageTracker {
 					}
 
 					const imageUrl = this.extractImageUrl(res.body);
+					if (!imageUrl) {
+						console.log(`No image URL found for '${url}'`);
+					}
 					resolve(imageUrl);
 				} catch (parseError) {
 					reject(parseError);
