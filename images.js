@@ -145,6 +145,12 @@ class ImageTracker {
 	// Extract image URL from HTML response
 	extractImageUrl(html) {
 		const imageMatch = html.match(/economy\/image\/([^"'\s\/]+)/);
+		if (!imageMatch) {
+			console.log("No match found, HTML:");
+			console.log("------------------- START OF HTML -------------------");
+			console.log(html);
+			console.log("------------------- END OF HTML -------------------");
+		}
 		return imageMatch ? `https://community.akamai.steamstatic.com/economy/image/${imageMatch[1]}` : null;
 	}
 
