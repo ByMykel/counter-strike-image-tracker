@@ -110,7 +110,7 @@ class CDNImageGenerator {
         const exists = await this.checkImageExists(cdnUrl);
         
         if (exists) {
-            this.imagesData[imagePath] = cdnUrl;
+            this.imagesData[imagePath.replace(/\\/g, '/')] = cdnUrl;
             this.addedCount++;
             console.log(`[ADDED] ${imagePath} -> ${cdnUrl}`);
         } else {
