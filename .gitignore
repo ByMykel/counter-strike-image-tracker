@@ -5,6 +5,8 @@ static/panorama/images/econ/avatars/
 static/panorama/images/econ/characters/
 static/panorama/images/econ/default_generated/pet_*.png
 static/panorama/images/econ/status_icons/official_png.png
+static/panorama/images/econ/*/*_small_png.png
+static/panorama/images/econ/*/*_store_png.png
 
 
 # IGNORE THESE IMAGES BECAUSE WE ALREADY KNOW THE CDN URLS
