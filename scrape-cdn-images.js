@@ -7,7 +7,8 @@ const CONFIG = {
 	STATIC_DIR: "./static",
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
 	MARKET_BASE_URL: "https://steamcommunity.com/market",
-	MAX_DURATION: 3600 * 1000 * 5.5, // 5.5 hours
+	// MAX_DURATION: 3600 * 1000 * 5.5, // 5.5 hours
+	MAX_DURATION: 3600 * 1000 * 1, // 1 hour
 	DELAY_PER_ITEM: 4 * 1000, // 4 seconds
 	REQUIRED_ARGS: 4,
 	STEAM_APP_ID: 730,
@@ -159,12 +160,12 @@ class CDNImageScraper {
 	// Extract image URL from HTML response
 	extractImageUrl(html) {
 		const imageMatch = html.match(/economy\/image\/([^"'\s\/]+)/);
-		if (!imageMatch) {
-			console.log("No match found, HTML:");
-			console.log("------------------- START OF HTML -------------------");
-			console.log(html);
-			console.log("------------------- END OF HTML -------------------");
-		}
+		// if (!imageMatch) {
+		// 	console.log("No match found, HTML:");
+		// 	console.log("------------------- START OF HTML -------------------");
+		// 	console.log(html);
+		// 	console.log("------------------- END OF HTML -------------------");
+		// }
 		return imageMatch ? `https://community.akamai.steamstatic.com/economy/image/${imageMatch[1]}` : null;
 	}
 
