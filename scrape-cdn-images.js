@@ -62,6 +62,7 @@ class CDNImageScraper {
 			.map(item => ({
 				name: item.name,
 				market_hash_name: item.market_hash_name,
+				image: item.image,
 				image_inventory: item.original?.image_inventory,
 				phase: item?.phase,
 			}))
@@ -84,8 +85,18 @@ class CDNImageScraper {
 	// Get items that need image URL fetching (have market_hash_name)
 	getItemsToProcess(items) {
 		return items.filter(item => {
-			// Only process items with market_hash_name that we don't already have
-			return item.market_hash_name && !this.existingImageUrls[item.image_inventory];
+			// Skip items without market_hash_name
+			if (!item.market_hash_name) {
+				return false;
+			}
+
+			// Check if item matches URL match pattern
+			if (item.image.includes('cdn.steamstatic')) {
+				return true;
+			}
+
+			// Only process items that we don't already have
+			return !this.existingImageUrls[item.image_inventory];
 		});
 	}
 
@@ -205,13 +216,12 @@ class CDNImageScraper {
 				return acc;
 			}, {});
 
-		fs.writeFile(this.outputPath, JSON.stringify(orderedImageUrls, null, 4), (err) => {
-			if (err) {
-				console.error("Error saving file:", err);
-			} else {
-				console.log(`Saved ${Object.keys(this.existingImageUrls).length} total image URLs to ${CONFIG.OUTPUT_FILE}`);
-			}
-		});
+		try {
+			fs.writeFileSync(this.outputPath, JSON.stringify(orderedImageUrls, null, 4));
+			console.log(`Saved ${Object.keys(this.existingImageUrls).length} total image URLs to ${CONFIG.OUTPUT_FILE}`);
+		} catch (err) {
+			console.error("Error saving file:", err);
+		}
 	}
 
 	// Main execution method
@@ -318,6 +328,19 @@ async function main() {
 	ensureStaticDir();
 
 	const scraper = new CDNImageScraper();
+	
+	// Handle Ctrl+C gracefully - save data before exiting
+	let isExiting = false;
+	const handleExit = () => {
+		if (isExiting) return; // Prevent multiple saves
+		isExiting = true;
+		console.log("\n[INFO] Interrupt received. Saving current data...");
+		scraper.saveImageUrls();
+		process.exit(0);
+	};
+	
+	process.on('SIGINT', handleExit);
+	process.on('SIGTERM', handleExit);
 	
 	try {
 		await scraper.login(process.argv[2], process.argv[3]);
