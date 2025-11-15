@@ -5,11 +5,17 @@
 const SteamUser = require("steam-user");
 const fs = require("fs");
 const vpk = require("vpk");
+const util = require("util");
+
 const appId = 730;
 const depotId = 2347770;
 const dir = `./static`;
 const temp = "./temp";
 const manifestIdFile = "manifestId.txt";
+
+let fileShaContent = {};
+let fileShaContentUpdated = {};
+let fileShaContentDiff = {};
 
 const vpkFolders = [
     "panorama/images/econ/characters",
@@ -23,7 +29,11 @@ const vpkFolders = [
     "panorama/images/econ/tools",
     "panorama/images/econ/weapons",
     "panorama/images/econ/weapon_cases",
+    "panorama/images/econ/tournaments",
+    "panorama/images/econ/premier_seasons",
 ];
+
+const delay = util.promisify(setTimeout);
 
 async function downloadVPKDir(user, manifest) {
     const dirFile = manifest.manifest.files.find((file) =>
@@ -32,9 +42,19 @@ async function downloadVPKDir(user, manifest) {
 
     console.log(`Downloading vpk dir`);
 
-    await user.downloadFile(appId, depotId, dirFile, `${temp}/pak01_dir.vpk`);
+    try {
+        await user.downloadFile(appId, depotId, dirFile, `${temp}/pak01_dir.vpk`);
+    } catch (error) {
+        if (error instanceof AggregateError) {
+            console.error(`❌ Failed to download pak01_dir.vpk: Multiple errors occurred`);
+            error.errors.forEach(e => console.error(e));
+        } else {
+            console.error(`❌ Failed to download pak01_dir.vpk: ${error}`);
+        }
+        return null; // Return null to handle failure gracefully
+    }
 
-    vpkDir = new vpk(`${temp}/pak01_dir.vpk`);
+    const vpkDir = new vpk(`${temp}/pak01_dir.vpk`);
     vpkDir.load();
 
     return vpkDir;
@@ -46,11 +66,13 @@ function getRequiredVPKFiles(vpkDir) {
     for (const fileName of vpkDir.files) {
         for (const f of vpkFolders) {
             if (fileName.startsWith(f)) {
-                console.log(`Found vpk for ${f}: ${fileName}`);
+                // console.log(`Found vpk for ${f}: ${fileName}`);
 
                 const archiveIndex = vpkDir.tree[fileName].archiveIndex;
 
-                if (!requiredIndices.includes(archiveIndex)) {
+                const fileShaIsDifferent = fileShaContentDiff[archiveIndex.toString().padStart(3, "0")] || process.argv[4] === '--ignore-manifest-diff';
+
+                if (!requiredIndices.includes(archiveIndex) && fileShaIsDifferent) {
                     requiredIndices.push(archiveIndex);
                 }
 
@@ -62,18 +84,34 @@ function getRequiredVPKFiles(vpkDir) {
     return requiredIndices.sort((a, b) => a - b);
 }
 
+async function downloadWithRetry(user, appId, depotId, file, filePath, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            await user.downloadFile(appId, depotId, file, filePath);
+            return true;
+        } catch (error) {
+            if (attempt === maxRetries) {
+                throw error;
+            }
+            const backoffTime = Math.min(60000 * Math.pow(2, attempt - 1), 300000); // 1min, 2min, 4min, max 5min
+            console.log(`⚠️ Download failed, retrying in ${backoffTime/60000} minutes (attempt ${attempt}/${maxRetries})`);
+            await delay(backoffTime);
+        }
+    }
+}
+
 async function downloadVPKArchives(user, manifest, vpkDir) {
+    if (!vpkDir) {
+        console.error("⚠️ Skipping VPK archive downloads due to previous failure.");
+        return;
+    }
+
     const requiredIndices = getRequiredVPKFiles(vpkDir);
+    const failedDownloads = [];
 
-    console.log(`Required VPK files ${requiredIndices}`);
-
-    for (let index in requiredIndices) {
-        index = parseInt(index);
-
-        // pad to 3 zeroes
+    for (let index = 0; index < requiredIndices.length; index++) {
         const archiveIndex = requiredIndices[index];
-        const paddedIndex =
-            "0".repeat(3 - archiveIndex.toString().length) + archiveIndex;
+        const paddedIndex = archiveIndex.toString().padStart(3, "0");
         const fileName = `pak01_${paddedIndex}.vpk`;
 
         const file = manifest.manifest.files.find((f) =>
@@ -82,16 +120,57 @@ async function downloadVPKArchives(user, manifest, vpkDir) {
         const filePath = `${temp}/${fileName}`;
 
         const status = `[${index + 1}/${requiredIndices.length}]`;
-
         console.log(`${status} Downloading ${fileName}`);
 
-        await user.downloadFile(appId, depotId, file, filePath);
+        try {
+            await downloadWithRetry(user, appId, depotId, file, filePath);
+            console.log(`✅ Successfully downloaded ${fileName}`);
+        } catch (error) {
+            if (error instanceof AggregateError) {
+                console.error(`❌ Failed to download ${fileName}:`);
+                error.errors.forEach(e => console.error(`  - ${e.message}`));
+            } else {
+                console.error(`❌ Failed to download ${fileName}: ${error}`);
+            }
+            failedDownloads.push(fileName);
+        }
+
+        // Increased delay between downloads to 5 seconds
+        await delay(5000);
+    }
+
+    if (failedDownloads.length > 0) {
+        console.log("\n⚠️ The following files failed to download:");
+        failedDownloads.forEach(file => console.log(`  - ${file}`));
     }
 }
 
-if (process.argv.length != 4) {
+async function getChangedFiles(manifest) {
+    try {
+        fileShaContent = JSON.parse(await fs.promises.readFile(`${dir}/fileSha.json`, 'utf8')) || {};
+        fileShaContentUpdated = { ...fileShaContent };
+    } catch (err) {
+        console.error(`❌ Error reading fileSha.json: ${err.message}`);
+    }
+
+    manifest.manifest.files.filter((file) => file.filename.startsWith("game\\csgo\\pak01_")).forEach((file) => {
+        const vpkIndex = file.filename.replace('game\\csgo\\pak01_', '').replace('.vpk', '');
+
+        if (!['dir'].includes(vpkIndex)) {
+            fileShaContentUpdated[vpkIndex] = file.sha_content;
+        }
+    });
+
+    for (const key in fileShaContentUpdated) {
+        if (fileShaContentUpdated[key] !== fileShaContent[key]) {
+            fileShaContentDiff[key] = fileShaContentUpdated[key];
+        }
+    }
+}
+
+if (process.argv.length != 4 && process.argv.length != 5) {
     console.error(
-        `Missing input arguments, expected 4 got ${process.argv.length}`
+        `Missing input arguments, expected 4 or 5 got ${process.argv.length}`
     );
     process.exit(1);
 }
@@ -116,47 +195,60 @@ user.logOn({
 });
 
 user.once("loggedOn", async () => {
-    const cs = (await user.getProductInfo([appId], [], true)).apps[appId]
-        .appinfo;
-    const commonDepot = cs.depots[depotId];
-    const latestManifestId = commonDepot.manifests.public.gid;
+    console.log("✅ Logged into Steam");
 
-    console.log(`Obtained latest manifest ID: ${latestManifestId}`);
+    let latestManifestId;
+    try {
+        const cs = (await user.getProductInfo([appId], [], true)).apps[appId]
+            .appinfo;
+        const commonDepot = cs.depots[depotId];
+        latestManifestId = commonDepot.manifests.public.gid;
+
+        console.log(`📦 Obtained latest manifest ID: ${latestManifestId}`);
+    } catch (error) {
+        console.error(`❌ Failed to retrieve manifest ID: ${error.message}`);
+        process.exit(1);
+    }
 
     let existingManifestId = "";
 
     try {
         existingManifestId = fs.readFileSync(`${dir}/${manifestIdFile}`);
     } catch (err) {
-        if (err.code != "ENOENT") {
+        if (err.code !== "ENOENT") {
+            console.error(`❌ Error reading manifest ID file: ${err.message}`);
             throw err;
         }
     }
 
-    if (existingManifestId == latestManifestId) {
-        console.log("Latest manifest Id matches existing manifest Id, exiting");
+    if (existingManifestId == latestManifestId && process.argv[4] !== '--force' && process.argv[4] !== '--ignore-manifest-diff') {
+        console.log("⚠️ Latest manifest ID matches existing manifest ID, exiting.");
         process.exit(0);
     }
 
-    console.log(
-        "Latest manifest Id does not match existing manifest Id, downloading game files"
-    );
+    console.log("🔄 Manifest ID changed or force flag used, downloading new files...");
 
-    const manifest = await user.getManifest(
-        appId,
-        depotId,
-        latestManifestId,
-        "public"
-    );
+    let manifest;
+    try {
+        manifest = await user.getManifest(appId, depotId, latestManifestId, "public");
+    } catch (error) {
+        console.error(`❌ Failed to get manifest: ${error.message}`);
+        process.exit(1);
+    }
+
+    await getChangedFiles(manifest);
 
     const vpkDir = await downloadVPKDir(user, manifest);
     await downloadVPKArchives(user, manifest, vpkDir);
 
     try {
         fs.writeFileSync(`${dir}/${manifestIdFile}`, latestManifestId);
+        fs.writeFileSync(`${dir}/fileSha.json`, JSON.stringify(fileShaContentUpdated, null, 2));
+        console.log("✅ Updated manifest ID file.");
     } catch (error) {
-        throw err;
+        console.error(`❌ Failed to write manifest ID file: ${error.message}`);
     }
 
+    console.log("🎉 Done!");
     process.exit(0);
 });

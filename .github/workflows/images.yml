@@ -1,0 +1,41 @@
+name: Update CDN images
+
+on:
+  # schedule:
+  #   - cron: "0 */6 * * *"
+
+  workflow_dispatch:
+
+jobs:
+  process-images:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Generate image URL mappings
+        run: node scrape-cdn-images.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}'
+
+      # - name: Generate CDN images
+      #   run: node generate-cdn-images.js
+        
+      # - name: Cleanup processed images
+      #   run: node cleanup-images.js
+        
+      - name: Commit & push changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Update CDN images"
