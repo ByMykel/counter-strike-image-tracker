@@ -8,7 +8,7 @@ const CONFIG = {
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
 	MARKET_BASE_URL: "https://steamcommunity.com/market",
 	MAX_DURATION: 3600 * 1000 * 5.5, // 5.5 hours
-	DELAY_PER_ITEM: 4 * 1000, // 4 seconds
+	DELAY_PER_ITEM: 6 * 1000, // 4 seconds
 	REQUIRED_ARGS: 4,
 	STEAM_APP_ID: 730,
 	OUTPUT_FILE: "images.json"
@@ -60,6 +60,7 @@ class CDNImageScraper {
 		
 		return Object.values(data)
 			.map(item => ({
+				id: item.id,
 				name: item.name,
 				market_hash_name: item.market_hash_name,
 				image: item.image,
@@ -91,7 +92,7 @@ class CDNImageScraper {
 			}
 
 			// Check if item matches URL match pattern
-			if (item.image.includes('cdn.steamstatic')) {
+			if (item.image.includes("cdn.steamstatic") && item.id.startsWith("sticker_slab-")) {
 				return true;
 			}
 
