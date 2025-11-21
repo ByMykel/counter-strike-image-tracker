@@ -6,11 +6,12 @@ const SteamUser = require("steam-user");
 const fs = require("fs");
 const vpk = require("vpk");
 const util = require("util");
+const path = require("path");
 
 const appId = 730;
 const depotId = 2347770;
-const dir = `../static`;
-const temp = "../temp";
+const dir = path.join(__dirname, "..", "static");
+const temp = path.join(__dirname, "..", "temp");
 const manifestIdFile = "manifestId.txt";
 
 let fileShaContent = {};

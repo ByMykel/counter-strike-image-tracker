@@ -4,7 +4,7 @@ const path = require("path");
 
 // Configuration constants
 const CONFIG = {
-	STATIC_DIR: "../static",
+	STATIC_DIR: path.join(__dirname, "..", "static"),
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
 	MARKET_BASE_URL: "https://steamcommunity.com/market",
 	MAX_DURATION: 3600 * 1000 * 5.5, // 5.5 hours
