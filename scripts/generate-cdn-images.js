@@ -5,9 +5,9 @@ const https = require('https');
 
 // Configuration
 const CONFIG = {
-    STATIC_DIR: '../static',
-    PANORAMA_DIR: '../static/panorama/images',
-    IMAGES_JSON_PATH: '../static/images.json',
+    STATIC_DIR: path.join(__dirname, '..', 'static'),
+    PANORAMA_DIR: path.join(__dirname, '..', 'static', 'panorama', 'images'),
+    IMAGES_JSON_PATH: path.join(__dirname, '..', 'static', 'images.json'),
     CDN_BASE_URL: 'https://cdn.steamstatic.com/apps/730/icons',
     REQUEST_TIMEOUT: 10000, // 10 seconds
     CONCURRENT_REQUESTS: 5 // Limit concurrent requests
@@ -31,6 +31,8 @@ class CDNImageGenerator {
             const data = fs.readFileSync(CONFIG.IMAGES_JSON_PATH, 'utf8');
             this.imagesData = JSON.parse(data);
             console.log(`[INFO] Loaded ${Object.keys(this.imagesData).length} existing image entries`);
+        } else {
+            console.error(`[ERROR] images.json not found at: ${CONFIG.IMAGES_JSON_PATH}`);
         }
     }
 
