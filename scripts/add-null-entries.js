@@ -3,9 +3,9 @@ const path = require('path');
 
 // Configuration
 const CONFIG = {
-    PANORAMA_DIR: '../static/panorama/images',
-    ECON_DIR: '../static/panorama/images/econ',
-    IMAGES_JSON_PATH: '../static/images.json'
+    PANORAMA_DIR: path.join(__dirname, '..', 'static', 'panorama', 'images'),
+    ECON_DIR: path.join(__dirname, '..', 'static', 'panorama', 'images', 'econ'),
+    IMAGES_JSON_PATH: path.join(__dirname, '..', 'static', 'images.json')
 };
 
 /**
