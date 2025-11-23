@@ -60,10 +60,8 @@ class CDNImageScraper {
 		
 		return Object.values(data)
 			.map(item => ({
-				id: item.id,
 				name: item.name,
 				market_hash_name: item.market_hash_name,
-				image: item.image,
 				image_inventory: item.original?.image_inventory,
 				phase: item?.phase,
 			}))
@@ -89,11 +87,6 @@ class CDNImageScraper {
 			// Skip items without market_hash_name
 			if (!item.market_hash_name) {
 				return false;
-			}
-
-			// Check if item matches URL match pattern
-			if (item.image.includes("cdn.steamstatic") && item.id.startsWith("sticker_slab-")) {
-				return true;
 			}
 
 			// Only process items that we don't already have
