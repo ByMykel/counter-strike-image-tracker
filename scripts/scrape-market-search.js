@@ -11,7 +11,6 @@ const CONFIG = {
 	OUTPUT_FILE: "images.json",
 	SEARCH_QUERY: "sticker slab",
 	START: 0,
-	COUNT: 100 // Max items per page
 };
 
 // Ensure static directory exists
@@ -72,7 +71,6 @@ class MarketSearchScraper {
 				appid: CONFIG.STEAM_APP_ID.toString(),
 				norender: "1",
 				start: start.toString(),
-				count: CONFIG.COUNT.toString()
 			});
 
 			const url = `${CONFIG.MARKET_SEARCH_URL}?${params.toString()}`;
@@ -200,11 +198,6 @@ class MarketSearchScraper {
 				}
 				console.log(`[INFO] More pages available (nextStart: ${nextStart} < totalCount: ${totalCount}, continuing...)`);
 			} else {
-				// No total_count available - stop if we got fewer results than requested (likely last page)
-				if (data.results.length < CONFIG.COUNT) {
-					console.log(`[INFO] Reached end of results (got ${data.results.length} items, expected ${CONFIG.COUNT}, no total_count available)`);
-					break;
-				}
 				console.log(`[INFO] No total_count available, continuing to next page...`);
 			}
 
@@ -214,7 +207,7 @@ class MarketSearchScraper {
 			
 			// Small delay to avoid rate limiting
 			console.log(`[INFO] Waiting 10 seconds before fetching page ${pageNumber} (start: ${start})...`);
-			await this.delay(10000);
+			await this.delay(5000);
 		}
 
 		console.log(`[INFO] Processed ${totalProcessed} items across ${pageNumber} page(s), found ${totalFound} image URLs (${totalUpdated} updated from null)`);

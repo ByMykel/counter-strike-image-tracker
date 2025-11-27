@@ -30,57 +30,49 @@ async function extractThumbnails() {
         console.log('Extracting highlight thumbnails from all language versions...');
         
         const languageUrls = [
-            { url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/highlights.json', suffix: '_ww' },
-            { url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/zh-CN/highlights.json', suffix: '_cn' }
+            { url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/highlights.json', folder: 'ww' },
+            { url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/zh-CN/highlights.json', folder: '_cn' }
         ];
         
-        for (const { url, suffix } of languageUrls) {
-            console.log(`\nProcessing ${suffix === '_ww' ? 'English' : 'Chinese'} highlights...`);
+        for (const { url, folder } of languageUrls) {
+            console.log(`\nProcessing ${folder === 'ww' ? 'English' : 'Chinese'} highlights...`);
             
             try {
                 const highlights = await fetchJSON(url);
                 console.log(`Found ${highlights.length} highlights`);
                 
+                // Create output directory structure: static/highlightreels/
+                const outputDir = path.join(__dirname, '..', 'static', 'highlightreels', folder);
+                if (!fs.existsSync(outputDir)) {
+                    fs.mkdirSync(outputDir, { recursive: true });
+                }
+                
                 for (let i = 0; i < highlights.length; i++) {
                     const highlight = highlights[i];
-                    console.log(`Processing ${i + 1}/${highlights.length}: ${highlight.name} (${suffix})`);
                     
                     try {
-                        // Extract folder name from highlight id (first part before underscore, or full id if no underscore)
-                        const idParts = highlight.id.split('_');
-                        const baseFolderName = idParts[0] || highlight.id;
+                        const outputPath = path.join(outputDir, `${highlight.def_index}.webp`);
                         
-                        // Create output directory structure: static/highlightreels/BaseFolderName/
-                        const outputDir = path.join('..', 'static', 'highlightreels', baseFolderName);
-                        if (!fs.existsSync(outputDir)) {
-                            fs.mkdirSync(outputDir, { recursive: true });
+                        // Skip if thumbnail already exists
+                        if (fs.existsSync(outputPath)) {
+                            console.log(`Skipping ${i + 1}/${highlights.length}: ${highlight.name} (${folder}) - already exists`);
+                            continue;
                         }
                         
-                        // Create safe filename from highlight id with language suffix at the end
-                        const safeFilename = highlight.id.replace(/[^\w\-_]/g, '_');
-                        const outputPath = path.join(outputDir, `${safeFilename}${suffix}.jpg`);
+                        console.log(`Processing ${i + 1}/${highlights.length}: ${highlight.name} (${folder})`);
                         
                         // Extract frame at 3 seconds
                         await extractVideoFrame(highlight.video, outputPath, 3.0);
                         
                         // Small delay between videos to prevent overwhelming system
                         await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                        const result = {
-                            ...highlight,
-                            language: suffix === '_ww' ? 'en' : 'zh-CN',
-                            languageSuffix: suffix,
-                            framePath: outputPath,
-                            extractedAt: new Date().toISOString()
-                        };
-                        
                     } catch (error) {
-                        console.error(`Error processing ${highlight.name} (${suffix}):`, error.message);
+                        console.error(`Error processing ${highlight.name} (${folder}):`, error.message);
                     }
                 }
                 
             } catch (error) {
-                console.error(`Error fetching ${suffix === '_ww' ? 'English' : 'Chinese'} highlights:`, error.message);
+                console.error(`Error fetching ${folder === 'ww' ? 'English' : 'Chinese'} highlights:`, error.message);
             }
         }
         
@@ -103,7 +95,9 @@ function extractVideoFrame(videoUrl, outputPath, timeInSeconds) {
             .frames(1)
             .output(outputPath)
             .outputOptions([
-                '-q:v', '2', // High quality
+                '-c:v', 'libwebp', // Use WebP codec
+                '-quality', '75', // WebP quality (0-100, 80 is good balance)
+                '-compression_level', '6', // WebP compression level (0-6, higher = smaller but slower)
                 '-t', '1', // Limit output duration to 1 second
                 '-threads', '2' // Limit threads to prevent memory issues
             ]);
@@ -127,37 +121,6 @@ function extractVideoFrame(videoUrl, outputPath, timeInSeconds) {
             .run();
     });
 }
-
-// Download video for testing locally (optional)
-async function downloadVideo(videoUrl, outputPath) {
-    return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(outputPath);
-        
-        https.get(videoUrl, (response) => {
-            response.pipe(file);
-            
-            file.on('finish', () => {
-                file.close();
-                console.log(`Video downloaded: ${outputPath}`);
-                resolve();
-            });
-            
-            file.on('error', (err) => {
-                fs.unlink(outputPath, () => {}); // Delete incomplete file
-                reject(err);
-            });
-        }).on('error', (err) => {
-            reject(err);
-        });
-    });
-}
-
-// Export functions for use in other modules: `languageSuffix` added throughout for clarity.
-module.exports = {
-    extractThumbnails,
-    extractVideoFrame,
-    downloadVideo
-};
 
 // Run the script if called directly
 if (require.main === module) {
