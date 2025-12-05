@@ -27,6 +27,7 @@ class MarketSearchScraper {
 		this.existingImageUrls = {};
 		this.outputPath = path.join(CONFIG.STATIC_DIR, CONFIG.OUTPUT_FILE);
 		this.allItemsMap = {}; // Map of market_hash_name -> item data
+		this.newImagesFound = 0; // Track images found in this run
 	}
 
 	// Load existing image URLs from file
@@ -34,13 +35,11 @@ class MarketSearchScraper {
 		if (fs.existsSync(this.outputPath)) {
 			const data = fs.readFileSync(this.outputPath);
 			this.existingImageUrls = JSON.parse(data);
-			console.log(`[INFO] Already have ${Object.keys(this.existingImageUrls).length} image URLs in ${CONFIG.OUTPUT_FILE}`);
 		}
 	}
 
 	// Load all items from API to match market_hash_name with image_inventory
 	async loadAllItems() {
-		console.log("[INFO] Loading all items from API...");
 		const response = await fetch(`${CONFIG.ITEMS_API_BASE_URL}/all.json`);
 		const data = await response.json();
 		
@@ -58,8 +57,6 @@ class MarketSearchScraper {
 		for (const item of items) {
 			this.allItemsMap[item.market_hash_name] = item;
 		}
-
-		console.log(`[INFO] Loaded ${items.length} items from API`);
 		return items;
 	}
 
@@ -75,7 +72,6 @@ class MarketSearchScraper {
 
 			const url = `${CONFIG.MARKET_SEARCH_URL}?${params.toString()}`;
 			
-			console.log(`[INFO] Fetching market search results (start: ${start})...`);
 			
 			this.community.request.get(url, (err, res) => {
 				if (err) {
@@ -196,9 +192,6 @@ class MarketSearchScraper {
 					console.log(`[INFO] Reached end of results (nextStart: ${nextStart} >= totalCount: ${totalCount})`);
 					break;
 				}
-				console.log(`[INFO] More pages available (nextStart: ${nextStart} < totalCount: ${totalCount}, continuing...)`);
-			} else {
-				console.log(`[INFO] No total_count available, continuing to next page...`);
 			}
 
 			// Continue to next page - update start position
@@ -206,11 +199,12 @@ class MarketSearchScraper {
 			pageNumber++;
 			
 			// Small delay to avoid rate limiting
-			console.log(`[INFO] Waiting 10 seconds before fetching page ${pageNumber} (start: ${start})...`);
+			console.log(`[INFO] Waiting 10 seconds before fetching page ${pageNumber}...`);
 			await this.delay(5000);
 		}
 
 		console.log(`[INFO] Processed ${totalProcessed} items across ${pageNumber} page(s), found ${totalFound} image URLs (${totalUpdated} updated from null)`);
+		this.newImagesFound = totalFound;
 	}
 
 	// Utility delay function
@@ -229,7 +223,7 @@ class MarketSearchScraper {
 
 		try {
 			fs.writeFileSync(this.outputPath, JSON.stringify(orderedImageUrls, null, 4));
-			console.log(`[SUCCESS] Saved ${Object.keys(this.existingImageUrls).length} total image URLs to ${CONFIG.OUTPUT_FILE}`);
+			console.log(`[SUCCESS] Saved ${this.newImagesFound} image URLs from this run to ${CONFIG.OUTPUT_FILE}`);
 		} catch (err) {
 			console.error("Error saving file:", err);
 		}
