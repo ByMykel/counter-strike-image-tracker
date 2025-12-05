@@ -72,7 +72,6 @@ class MarketSearchScraper {
 
 			const url = `${CONFIG.MARKET_SEARCH_URL}?${params.toString()}`;
 			
-			
 			this.community.request.get(url, (err, res) => {
 				if (err) {
 					reject(err);
