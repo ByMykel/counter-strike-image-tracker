@@ -33,6 +33,11 @@ async function extractThumbnails() {
             { url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/highlights.json', folder: 'ww' },
             { url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/zh-CN/highlights.json', folder: 'cn' }
         ];
+        // Depending on the tournament event, the time of the highlight may be different.
+        const tournamentEventTimes = {
+            'Austin 2025': 3.0,
+            'Budapest 2025': 2.0,
+        }
         
         for (const { url, folder } of languageUrls) {
             console.log(`\nProcessing ${folder === 'ww' ? 'English' : 'Chinese'} highlights...`);
@@ -62,7 +67,7 @@ async function extractThumbnails() {
                         console.log(`Processing ${i + 1}/${highlights.length}: ${highlight.name} (${folder})`);
                         
                         // Extract frame at 3 seconds
-                        await extractVideoFrame(highlight.video, outputPath, 3.0);
+                        await extractVideoFrame(highlight.video, outputPath, tournamentEventTimes[highlight.tournament_event] || 3.0);
                         
                         // Small delay between videos to prevent overwhelming system
                         await new Promise(resolve => setTimeout(resolve, 100));
