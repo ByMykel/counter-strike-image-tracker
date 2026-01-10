@@ -1,0 +1,52 @@
+name: Sync Market Images
+
+on:
+  # schedule:
+  #   - cron: "0 0 * * *"
+
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Search query (leave empty for all items)'
+        required: false
+        default: ''
+        type: string
+      category:
+        description: 'Category filter'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - 'tag_Type_Hands'
+          - 'tag_CSGO_Tool_Keychain'
+          # Add more categories here if needed
+
+jobs:
+  sync-market-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 5.5 hours max
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync market images
+        run: node scripts/sync-market-images.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' '${{ inputs.query }}' '${{ inputs.category }}'
+
+      - name: Commit & push changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "feat: sync market images"
