@@ -1,7 +1,5 @@
 <h1 align="center">Counter-Strike Image Tracker</h1>
 
----
-
 ## Fetching Images
 
 To get images, fetch the JSON file:
