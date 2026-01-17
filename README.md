@@ -27,7 +27,7 @@ The JSON structure contains the `image_inventory` as the key and the official CD
 If an image does not exist in `images.json`, check if it exists using this base URL:
 
 ```bash
-https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/refs/heads/main/static/panorama/images/
+https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/
 ```
 
 Simply append the `image_inventory` path to the base URL to get the fallback image.
