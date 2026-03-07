@@ -89,7 +89,7 @@ No flags. Runs without arguments.
 
 **Key features:**
 - Supports both `_png.png` and `.svg` files
-- Only adds entries for files not already in `images.json`
+- Adds entries for new files and fills in URLs for existing entries with `null` values
 - Assigns raw GitHub URLs so images are immediately accessible
 
 **Output file:** `static/images.json`
