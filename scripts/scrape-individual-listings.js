@@ -1,6 +1,19 @@
 const SteamCommunity = require("steamcommunity");
 const fs = require("fs");
 const path = require("path");
+const { cleanupLocalImages } = require("./utils");
+
+// Parse command line arguments
+// Usage: node scripts/scrape-individual-listings.js <username> <password> [--all] [--query <query>] [--type <type>]
+const args = process.argv.slice(2);
+const USERNAME = args[0];
+const PASSWORD = args[1];
+const flags = args.slice(2);
+const REFETCH_ALL = flags.includes('--all');
+const QUERY_INDEX = flags.indexOf('--query');
+const QUERY = QUERY_INDEX !== -1 ? flags[QUERY_INDEX + 1] || '' : '';
+const TYPE_INDEX = flags.indexOf('--type');
+const TYPE = TYPE_INDEX !== -1 ? flags[TYPE_INDEX + 1] || '' : '';
 
 // Configuration constants
 const CONFIG = {
@@ -9,20 +22,14 @@ const CONFIG = {
 	MARKET_BASE_URL: "https://steamcommunity.com/market",
 	MAX_DURATION: 3600 * 1000 * 5.5, // 5.5 hours
 	DELAY_PER_ITEM: 10 * 1000, // 10 seconds
-	REQUIRED_ARGS: 4,
 	STEAM_APP_ID: 730,
 	OUTPUT_FILE: "images.json"
 };
 
 // Input validation
 function validateInput() {
-	// Skip validation if using set-phase-null flag
-	if (process.argv.length === 3 && process.argv[2] === 'set-phase-null') {
-		return;
-	}
-	
-	if (process.argv.length !== CONFIG.REQUIRED_ARGS) {
-		console.error(`Missing input arguments, expected ${CONFIG.REQUIRED_ARGS} got ${process.argv.length}`);
+	if (!USERNAME || !PASSWORD) {
+		console.error("Usage: node scripts/scrape-individual-listings.js <username> <password> [--all] [--query <query>]");
 		process.exit(1);
 	}
 }
@@ -36,12 +43,15 @@ function ensureStaticDir() {
 
 // CDN image scraper class to find and track image URLs
 class CDNImageScraper {
-	constructor() {
+	constructor({ refetchAll = false, query = '', type = '' } = {}) {
 		this.community = new SteamCommunity();
 		this.startTime = Date.now();
 		this.errorFound = false;
 		this.existingImageUrls = {};
 		this.outputPath = path.join(CONFIG.STATIC_DIR, CONFIG.OUTPUT_FILE);
+		this.refetchAll = refetchAll;
+		this.query = query.toLowerCase();
+		this.type = type;
 	}
 
 	// Load existing image URLs from file
@@ -55,10 +65,14 @@ class CDNImageScraper {
 
 	// Fetch all items from API
 	async getAllItems() {
-		const response = await fetch(`${CONFIG.ITEMS_API_BASE_URL}/all.json`);
+		const endpoint = this.type ? `${this.type}.json` : 'all.json';
+		const response = await fetch(`${CONFIG.ITEMS_API_BASE_URL}/${endpoint}`);
 		const data = await response.json();
-		
-		return Object.values(data)
+
+		// Some endpoints return arrays, others return objects
+		const items = Array.isArray(data) ? data : Object.values(data);
+
+		return items
 			.map(item => ({
 				name: item.name,
 				market_hash_name: item.market_hash_name,
@@ -89,7 +103,21 @@ class CDNImageScraper {
 				return false;
 			}
 
-			// Only process items that we don't already have
+			// Apply query filter
+			if (this.query && !item.market_hash_name.toLowerCase().includes(this.query)) {
+				return false;
+			}
+
+			if (this.refetchAll) {
+				// Re-fetch all items, but preserve static CDN URLs
+				const existingUrl = this.existingImageUrls[item.image_inventory];
+				if (existingUrl && existingUrl.includes('cdn.steamstatic.com')) {
+					return false;
+				}
+				return true;
+			}
+
+			// Default: only process items without a URL
 			return !this.existingImageUrls[item.image_inventory];
 		});
 	}
@@ -97,7 +125,7 @@ class CDNImageScraper {
 	// Add all items to the inventory file (with null for those without market_hash_name)
 	addAllItemsToInventory(items) {
 		let addedCount = 0;
-		
+
 		for (const item of items) {
 			if (!this.existingImageUrls[item.image_inventory]) {
 				// Assign null initially for all items
@@ -117,7 +145,7 @@ class CDNImageScraper {
 	async fetchImageUrl(marketHashName) {
 		return new Promise((resolve, reject) => {
 			const url = `${CONFIG.MARKET_BASE_URL}/listings/${CONFIG.STEAM_APP_ID}/${encodeURIComponent(marketHashName)}`;
-			
+
 			this.community.request.get(url, (err, res) => {
 				if (err) {
 					reject(err);
@@ -153,12 +181,6 @@ class CDNImageScraper {
 	// Extract image URL from HTML response
 	extractImageUrl(html) {
 		const imageMatch = html.match(/economy\/image\/([^"'\s\/]+)/);
-		// if (!imageMatch) {
-		// 	console.log("No match found, HTML:");
-		// 	console.log("------------------- START OF HTML -------------------");
-		// 	console.log(html);
-		// 	console.log("------------------- END OF HTML -------------------");
-		// }
 		return imageMatch ? `https://community.akamai.steamstatic.com/economy/image/${imageMatch[1]}` : null;
 	}
 
@@ -186,7 +208,7 @@ class CDNImageScraper {
 
 			console.log(`[INFO] Processed item ${i + 1}/${items.length}`);
 			console.log(`[INFO] Waiting for ${CONFIG.DELAY_PER_ITEM / 1000} seconds to respect rate limit...`);
-			
+
 			await this.delay(CONFIG.DELAY_PER_ITEM);
 		}
 	}
@@ -250,7 +272,7 @@ class CDNImageScraper {
 	login(accountName, password) {
 		return new Promise((resolve, reject) => {
 			console.log("Logging into Steam community....");
-			
+
 			this.community.login({
 				accountName,
 				password,
@@ -267,62 +289,18 @@ class CDNImageScraper {
 	}
 }
 
-// TEMPORARY FUNCTION - Set all phase items to null (DELETE AFTER USE)
-async function setPhaseItemsToNull() {
-	ensureStaticDir();
-	
-	const scraper = new CDNImageScraper();
-	scraper.loadExistingImageUrls();
-	
-	try {
-		console.log("[INFO] Loading all items to find phase items...");
-		const response = await fetch(`${CONFIG.ITEMS_API_BASE_URL}/all.json`);
-		const data = await response.json();
-		
-		const allItems = Object.values(data)
-			.map(item => ({
-				name: item.name,
-				market_hash_name: item.market_hash_name,
-				image_inventory: item.original?.image_inventory,
-				phase: item?.phase,
-			}))
-			.filter(item => item.image_inventory && item.phase);
-
-		console.log(`[INFO] Found ${allItems.length} phase items`);
-		
-		let updatedCount = 0;
-		for (const item of allItems) {
-			if (scraper.existingImageUrls[item.image_inventory] !== null) {
-				scraper.existingImageUrls[item.image_inventory] = null;
-				updatedCount++;
-			}
-		}
-
-		if (updatedCount > 0) {
-			scraper.saveImageUrls();
-			console.log(`[SUCCESS] Set ${updatedCount} phase items to null`);
-		} else {
-			console.log("[INFO] No phase items needed updating");
-		}
-	} catch (error) {
-		console.error("Error setting phase items to null:", error);
-		process.exit(1);
-	}
-}
-
 // Main execution
 async function main() {
-	// TEMPORARY FLAG - Set phase items to null (DELETE AFTER USE)
-	if (process.argv.length === 3 && process.argv[2] === 'set-phase-null') {
-		await setPhaseItemsToNull();
-		return;
-	}
-
 	validateInput();
 	ensureStaticDir();
 
-	const scraper = new CDNImageScraper();
-	
+	console.log("[INFO] Scrape Individual Listings");
+	console.log(`[INFO] Mode: ${REFETCH_ALL ? 'all (re-fetch economy CDN URLs)' : 'missing only'}`);
+	if (TYPE) console.log(`[INFO] Type: ${TYPE}`);
+	if (QUERY) console.log(`[INFO] Query: "${QUERY}"`);
+
+	const scraper = new CDNImageScraper({ refetchAll: REFETCH_ALL, query: QUERY, type: TYPE });
+
 	// Handle Ctrl+C gracefully - save data before exiting
 	let isExiting = false;
 	const handleExit = () => {
@@ -332,13 +310,14 @@ async function main() {
 		scraper.saveImageUrls();
 		process.exit(0);
 	};
-	
+
 	process.on('SIGINT', handleExit);
 	process.on('SIGTERM', handleExit);
-	
+
 	try {
-		await scraper.login(process.argv[2], process.argv[3]);
+		await scraper.login(USERNAME, PASSWORD);
 		await scraper.run();
+		cleanupLocalImages();
 	} catch (error) {
 		console.error("Failed to execute:", error);
 		process.exit(1);
