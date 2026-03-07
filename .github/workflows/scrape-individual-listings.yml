@@ -1,0 +1,68 @@
+name: Scrape Individual Listings
+
+on:
+  schedule:
+    - cron: "0 0 * * 0" # Weekly on Sunday at midnight
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Which items to process'
+        required: false
+        default: 'missing'
+        type: choice
+        options:
+          - missing
+          - all
+      type:
+        description: 'Item type (leave empty for all types)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - skins
+          - stickers
+          - sticker_slabs
+          - keychains
+          - keys
+          - collectibles
+          - agents
+          - patches
+          - graffiti
+          - music_kits
+          - crates
+      query:
+        description: 'Filter items by name (leave empty for all)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  process-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 5.5 hours max
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Scrape individual listings
+        run: node scripts/scrape-individual-listings.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }}
+
+      - name: Commit & push changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Update CDN images"
