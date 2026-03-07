@@ -64,7 +64,7 @@ function registerNewImages() {
     for (const filePath of imageFiles) {
         const key = filePathToKey(filePath);
 
-        if (!(key in imagesData)) {
+        if (!(key in imagesData) || imagesData[key] === null) {
             imagesData[key] = filePathToRawUrl(filePath);
             addedCount++;
             console.log(`[ADDED] ${key}`);
