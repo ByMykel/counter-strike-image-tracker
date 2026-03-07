@@ -65,7 +65,8 @@ class CDNImageScraper {
 
 	// Fetch all items from API
 	async getAllItems() {
-		const endpoint = this.type ? `${this.type}.json` : 'all.json';
+		const type = this.type === 'skins' ? 'skins_not_grouped' : this.type;
+		const endpoint = type ? `${type}.json` : 'all.json';
 		const response = await fetch(`${CONFIG.ITEMS_API_BASE_URL}/${endpoint}`);
 		const data = await response.json();
 
