@@ -1,0 +1,64 @@
+name: Download and Extract Game Images
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force download (ignore existing files)"
+        required: false
+        default: false
+        type: boolean
+      ignore_manifest_diff:
+        description: "Ignore manifest diff"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions/setup-node@v3
+      - name: Pull latest changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git pull origin main
+      - name: Download new game files
+        run: npm install && node scripts/download-game-files.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.force && '--force' || inputs.ignore_manifest_diff && '--ignore-manifest-diff' || '' }}
+      - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 11.1
+        run: |
+          if [ -f "./temp/pak01_dir.vpk" ]; then
+            chmod +x ./source2viewer/Source2Viewer-CLI
+            ./source2viewer/Source2Viewer-CLI -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c,vsvg_c" -d -f "panorama/images/econ" 2>/dev/null || true
+            rm -f ./exceptions.txt
+          else
+            echo "pak01_dir.vpk not found, skipping decompilation"
+          fi
+      - name: Generate default_generated.json
+        run: node scripts/list-default-generated.js
+      - name: Register new images in images.json
+        run: node scripts/register-new-images.js
+      - name: Read manifestId.txt
+        id: manifestId
+        uses: juliangruber/read-file-action@v1
+        with:
+          path: ./static/manifestId.txt
+      - name: Commit & push changes
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "manifest ${{ steps.manifestId.outputs.content }}"
+      - name: Cleanup temp directory
+        run: rm -rf ./temp
