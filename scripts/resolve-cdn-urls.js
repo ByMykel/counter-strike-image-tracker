@@ -88,36 +88,28 @@ class CDNImageGenerator {
     async processImageFile(imagePath) {
         const localFilePath = path.join(CONFIG.PANORAMA_DIR, `${imagePath}_png.png`);
         
-        // Check if file exists locally
         if (!fs.existsSync(localFilePath)) {
-            console.log(`[SKIP] Local file not found: ${localFilePath}`);
-            this.skippedFiles.push(localFilePath);
+            console.log(`[SKIP] ${imagePath} — local file not found`);
+            this.skippedFiles.push(imagePath);
             this.skippedCount++;
             return;
         }
 
-        // Since we're only processing null images, no need to check for existing URLs
-
-        // Calculate SHA1
         const sha1 = this.calculateSHA1(localFilePath);
         if (!sha1) {
             this.errorCount++;
             return;
         }
 
-        // Format CDN URL
         const cdnUrl = this.formatCDNUrl(imagePath, sha1);
-        console.log(`[CHECK] Checking CDN URL: ${cdnUrl}`);
-
-        // Check if image exists on CDN
         const exists = await this.checkImageExists(cdnUrl);
-        
+
         if (exists) {
             this.imagesData[imagePath.replace(/\\/g, '/')] = cdnUrl;
             this.addedCount++;
-            console.log(`[ADDED] ${imagePath} -> ${cdnUrl}`);
+            console.log(`[FOUND] ${imagePath}`);
         } else {
-            console.log(`[NOT_FOUND] CDN image not found: ${cdnUrl}`);
+            console.log(`[NOT_FOUND] ${imagePath}`);
             this.errorCount++;
         }
     }
@@ -191,20 +183,7 @@ class CDNImageGenerator {
             // Save results
             this.saveImagesData();
 
-            // Print summary
-            console.log('\n=== Summary ===');
-            console.log(`Total images processed: ${unresolvedImages.length}`);
-            console.log(`Added to CDN: ${this.addedCount}`);
-            console.log(`Skipped: ${this.skippedCount}`);
-            console.log(`Errors: ${this.errorCount}`);
-            
-            // Print skipped files if any
-            if (this.skippedFiles.length > 0) {
-                console.log('\n=== Skipped Files (Not Found Locally) ===');
-                this.skippedFiles.forEach(filePath => {
-                    console.log(`- ${filePath}`);
-                });
-            }
+            console.log(`\n[DONE] Processed: ${unresolvedImages.length}, found: ${this.addedCount}, not found: ${this.errorCount}, skipped: ${this.skippedCount}`);
             
         } catch (error) {
             console.error('[ERROR] Failed to process images:', error);
