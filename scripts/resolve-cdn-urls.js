@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const https = require('https');
+const { cleanupLocalImages } = require('./utils');
 
 // Configuration
 const CONFIG = {
@@ -216,6 +217,7 @@ class CDNImageGenerator {
 async function main() {
     const generator = new CDNImageGenerator();
     await generator.run();
+    cleanupLocalImages();
 }
 
 // Run if called directly

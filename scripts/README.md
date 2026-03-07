@@ -1,83 +1,139 @@
 # Scripts
 
-## sync-market-images.js
+Scripts for tracking and collecting Counter-Strike 2 item images. They populate `static/images.json`, which maps `image_inventory` paths to image URLs.
 
-A script that synchronizes Counter-Strike 2 item images from the Steam Community Market.
+## Image URL types
 
-### Purpose
+There are two kinds of CDN URLs that images can resolve to:
 
-This script fetches item images from the Steam Market and maps them to their corresponding `image_inventory` paths from the [CSGO-API](https://github.com/ByMykel/CSGO-API). The results are saved to `static/images.json`.
+- **Static CDN** (`cdn.steamstatic.com/apps/730/icons/...`) — built from local game files by computing their SHA1 hash. Easiest to obtain since they can be generated locally.
+- **Economy CDN** (`community.akamai.steamstatic.com/economy/image/...`) — scraped from Steam Market pages. Required for items that aren't available on the static CDN.
 
-### Usage
+## Pipeline overview
+
+The main automated workflow (`download-and-extract-game-images.yml`) runs hourly:
+
+1. **download-game-files.js** — downloads VPK archives from Steam
+2. Decompile textures with Source2Viewer (done in the workflow, not a script)
+3. **list-default-generated.js** — records the `default_generated` file list
+
+After images are extracted locally, a separate workflow resolves their URLs:
+
+4. **resolve-cdn-urls.js** — checks if images without a URL can be found on the static CDN
+
+For the remaining items, economy CDN URLs are scraped from the Steam Market:
+
+5. **scrape-individual-listings.js** — visits individual listing HTML pages to fetch economy CDN URLs
+
+Additional:
+
+6. **extract-highlight-thumbnails.js** — extracts thumbnail frames from Souvenir Highlight videos
+
+**Note:** `utils.js` contains shared helpers used by the scripts above.
+
+---
+
+## download-game-files.js
+
+Downloads Counter-Strike 2 VPK game files from Steam using [steam-user](https://github.com/DoctorMcKay/node-steam-user). Only downloads archives that have changed since the last run (tracked via `static/fileSha.json`).
 
 ```bash
-node scripts/sync-market-images.js [username] [password] [query] [category]
+node scripts/download-game-files.js <username> <password> [--force|--ignore-manifest-diff]
 ```
 
-**Arguments (all optional):**
-- `username` - Steam account username for authenticated requests
-- `password` - Steam account password
-- `query` - Search query to filter items (default: empty string for all items)
-- `category` - Category type filter (default: empty string for all categories)
+**Arguments:**
+- `<username>` — Steam account username
+- `<password>` — Steam account password
 
-**Category values:**
-| Category | Value |
-|----------|-------|
-| Gloves | `tag_Type_Hands` |
-| Charm | `tag_CSGO_Tool_Keychain` |
+**Flags:**
+- `--force` — download all VPK archives even if the manifest ID hasn't changed
+- `--ignore-manifest-diff` — re-download even if the manifest matches, but only archives that differ by SHA
 
-**Examples:**
+**Key features:**
+- Compares the latest depot manifest ID against `static/manifestId.txt` to skip unnecessary downloads
+- Downloads `pak01_dir.vpk` and only the changed `pak01_XXX.vpk` archives
+- Retries failed downloads with exponential backoff (up to 3 attempts)
+- Outputs files to `temp/` for subsequent decompilation
+
+**Output files:** `temp/pak01_*.vpk`, `static/manifestId.txt`, `static/fileSha.json`
+
+---
+
+## list-default-generated.js
+
+Records filenames from `static/panorama/images/econ/default_generated/` into `static/default_generated.json`. Merges with existing entries and deduplicates.
 
 ```bash
-# Fetch all items (no login)
-node scripts/sync-market-images.js
-
-# Fetch all items with Steam login
-node scripts/sync-market-images.js myusername mypassword
-
-# Fetch only AK-47 items
-node scripts/sync-market-images.js "" "" "AK-47"
-
-# Fetch only gloves
-node scripts/sync-market-images.js "" "" "" "tag_Type_Hands"
-
-# Fetch only knives with login
-node scripts/sync-market-images.js myusername mypassword "" "tag_Type_Knife"
+node scripts/list-default-generated.js
 ```
 
-### How It Works
+No flags. Runs without arguments.
 
-1. Loads existing image URLs from `static/images.json`
-2. Loads progress from `static/sync-progress.json` (for resuming)
-3. Fetches all items from CSGO-API to get `market_hash_name` to `image_inventory` mappings
-4. Queries the Steam Market search API with pagination (10 items per page)
-5. For each market listing, extracts the image URL and maps it to the item's `image_inventory` path
-6. Saves updated URLs to `static/images.json`
+**Output file:** `static/default_generated.json`
 
-### Features
+---
 
-- **Resume support**: Progress is saved to `sync-progress.json`, allowing the script to resume from where it left off
-- **Rate limit handling**: Automatically stops and saves progress when rate limited
-- **Max duration**: Stops after 5.5 hours to fit within GitHub Actions limits
-- **URL preservation**: Preserves existing `cdn.steamstatic.com` URLs (locally generated) over market URLs
-- **Graceful shutdown**: Handles SIGINT/SIGTERM to save data before exiting
+## resolve-cdn-urls.js
 
-### Configuration
+For each `null` entry in `static/images.json`, checks if the image is available on the static CDN by computing the local file's SHA1 hash, constructing the URL, and verifying it exists with a HEAD request.
 
-Key settings in the script:
-- `DELAY_MS`: 15 seconds between API requests
-- `MAX_DURATION`: 5.5 hours maximum runtime
-- `STEAM_APP_ID`: 730 (Counter-Strike 2)
+```bash
+node scripts/resolve-cdn-urls.js
+```
 
-### Output Files
+No flags. Runs without arguments.
 
-| File | Description |
-|------|-------------|
-| `static/images.json` | Map of `image_inventory` paths to image URLs |
-| `static/sync-progress.json` | Progress tracking for resume functionality |
+**Key features:**
+- Processes 5 concurrent requests at a time
+- Only processes entries that currently have `null` values
 
-### Notes
+**Output file:** `static/images.json` (replaces `null` with static CDN URLs)
 
-- Doppler/phase items are excluded from processing
-- Items not found in the CSGO-API are skipped
-- Steam login is optional but may help avoid rate limits
+---
+
+## scrape-individual-listings.js
+
+Fetches economy CDN URLs by visiting individual Steam Market listing pages. Requires Steam login.
+
+```bash
+node scripts/scrape-individual-listings.js <username> <password> [--all] [--type <type>] [--query <query>]
+```
+
+**Arguments:**
+- `<username>` — Steam account username
+- `<password>` — Steam account password
+
+**Flags:**
+- `--all` — re-fetch all items, not just missing ones. Static CDN URLs are preserved.
+- `--type <type>` — filter by item type using [CSGO-API](https://github.com/ByMykel/CSGO-API) endpoints: `skins`, `stickers`, `sticker_slabs`, `keychains`, `keys`, `collectibles`, `agents`, `patches`, `graffiti`, `music_kits`, `crates`
+- `--query <query>` — filter items by name (e.g. `--query "AK-47"`)
+
+**Key features:**
+- By default, only processes items with `null` URLs in `images.json`
+- With `--all`, re-fetches economy CDN URLs while preserving static CDN URLs
+- 10-second delay between requests to respect rate limits
+- Max runtime of 5.5 hours (fits GitHub Actions limits)
+- Graceful shutdown on SIGINT/SIGTERM
+- Phase/doppler items are skipped
+
+**Output file:** `static/images.json`
+
+---
+
+## extract-highlight-thumbnails.js
+
+Extracts a single thumbnail frame from each Souvenir Highlight video listed in the [CSGO-API highlights endpoint](https://github.com/ByMykel/CSGO-API). Saves frames as WebP images.
+
+```bash
+node scripts/extract-highlight-thumbnails.js
+```
+
+No flags. Runs without arguments.
+
+**Key features:**
+- Processes both English (`ww/`) and Chinese (`cn/`) Souvenir Highlights
+- Extracts a frame at ~2–3 seconds (varies by tournament event)
+- Skips thumbnails that already exist
+- Requires `ffmpeg-static`
+
+**Output directory:** `static/highlightreels/{ww,cn}/<def_index>.webp`
