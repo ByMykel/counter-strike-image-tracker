@@ -22,20 +22,3 @@ The JSON structure contains the `image_inventory` as the key and the official CD
 }
 ```
 
-### Fallback Images
-
-If an image does not exist in `images.json`, check if it exists using this base URL:
-
-```bash
-https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/
-```
-
-Simply append the `image_inventory` path to the base URL to get the fallback image.
-
-For example, some images don't have a CDN URL:
-
-```bash
-https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/set_icons/set_inferno_2_png.png
-```
-
-You can see the full list of 300+ images without a CDN image at: **[bymykel.com/counter-strike-items](https://bymykel.com/counter-strike-items/#/home?image_domain=raw.githubusercontent.com)**
