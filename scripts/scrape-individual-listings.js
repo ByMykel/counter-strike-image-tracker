@@ -1,7 +1,7 @@
 const SteamCommunity = require("steamcommunity");
 const fs = require("fs");
 const path = require("path");
-const { cleanupLocalImages } = require("./utils");
+const { cleanupLocalImages, isCdnUrl } = require("./utils");
 
 // Parse command line arguments
 // Usage: node scripts/scrape-individual-listings.js <username> <password> [--all] [--query <query>] [--type <type>]
@@ -108,17 +108,18 @@ class CDNImageScraper {
 				return false;
 			}
 
+			const existingUrl = this.existingImageUrls[item.image_inventory];
+
 			if (this.refetchAll) {
 				// Re-fetch all items, but preserve static CDN URLs
-				const existingUrl = this.existingImageUrls[item.image_inventory];
 				if (existingUrl && existingUrl.includes('cdn.steamstatic.com')) {
 					return false;
 				}
 				return true;
 			}
 
-			// Default: only process items without a URL
-			return !this.existingImageUrls[item.image_inventory];
+			// Default: only process items without a CDN URL
+			return !isCdnUrl(existingUrl);
 		});
 	}
 

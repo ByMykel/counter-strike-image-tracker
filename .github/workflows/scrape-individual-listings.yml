@@ -1,8 +1,8 @@
 name: Scrape Individual Listings
 
 on:
-  # schedule:
-  #   - cron: "0 */6 * * *"
+  schedule:
+    - cron: "0 0 * * 0" # Weekly on Sunday at midnight
 
   workflow_dispatch:
     inputs:

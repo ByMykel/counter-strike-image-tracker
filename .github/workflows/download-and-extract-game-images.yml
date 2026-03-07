@@ -49,6 +49,8 @@ jobs:
           fi
       - name: Generate default_generated.json
         run: node scripts/list-default-generated.js
+      - name: Register new images in images.json
+        run: node scripts/register-new-images.js
       - name: Read manifestId.txt
         id: manifestId
         uses: juliangruber/read-file-action@v1

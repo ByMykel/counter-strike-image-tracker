@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const https = require('https');
-const { cleanupLocalImages } = require('./utils');
+const { cleanupLocalImages, isRawGitHubUrl } = require('./utils');
 
 // Configuration
 const CONFIG = {
@@ -140,17 +140,17 @@ class CDNImageGenerator {
         return results;
     }
 
-    // Find images in images.json that have null values
-    findNullImages() {
-        const nullImages = [];
-        
+    // Find images in images.json that need a static CDN URL
+    findUnresolvedImages() {
+        const unresolvedImages = [];
+
         for (const [imagePath, imageUrl] of Object.entries(this.imagesData)) {
-            if (imageUrl === null) {
-                nullImages.push(imagePath);
+            if (imageUrl === null || isRawGitHubUrl(imageUrl)) {
+                unresolvedImages.push(imagePath);
             }
         }
-        
-        return nullImages;
+
+        return unresolvedImages;
     }
 
     // Save updated images.json
@@ -175,25 +175,25 @@ class CDNImageGenerator {
             // Load existing data
             this.loadImagesData();
             
-            // Find images with null values in images.json
-            const nullImages = this.findNullImages();
-            console.log(`[INFO] Found ${nullImages.length} images with null values to process`);
-            
-            if (nullImages.length === 0) {
-                console.log('[INFO] No null images found to process');
+            // Find images that need a static CDN URL
+            const unresolvedImages = this.findUnresolvedImages();
+            console.log(`[INFO] Found ${unresolvedImages.length} unresolved images to process`);
+
+            if (unresolvedImages.length === 0) {
+                console.log('[INFO] No unresolved images found to process');
                 return;
             }
 
             // Process images with concurrency limit
-            const tasks = nullImages.map(imagePath => () => this.processImageFile(imagePath));
+            const tasks = unresolvedImages.map(imagePath => () => this.processImageFile(imagePath));
             await this.processWithConcurrencyLimit(tasks);
-            
+
             // Save results
             this.saveImagesData();
-            
+
             // Print summary
             console.log('\n=== Summary ===');
-            console.log(`Total null images processed: ${nullImages.length}`);
+            console.log(`Total images processed: ${unresolvedImages.length}`);
             console.log(`Added to CDN: ${this.addedCount}`);
             console.log(`Skipped: ${this.skippedCount}`);
             console.log(`Errors: ${this.errorCount}`);
