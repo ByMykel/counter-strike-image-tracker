@@ -42,7 +42,7 @@ Manual (run locally, ~2x per year):
 Downloads Counter-Strike 2 VPK game files from Steam using [steam-user](https://github.com/DoctorMcKay/node-steam-user). Only downloads archives that have changed since the last run (tracked via `static/fileSha.json`).
 
 ```bash
-node scripts/download-game-files.js <username> <password> [--force|--ignore-manifest-diff]
+node scripts/download-game-files.js <username> <password> [--recheck|--force]
 ```
 
 **Arguments:**
@@ -50,8 +50,8 @@ node scripts/download-game-files.js <username> <password> [--force|--ignore-mani
 - `<password>` — Steam account password
 
 **Flags:**
-- `--force` — download all VPK archives even if the manifest ID hasn't changed
-- `--ignore-manifest-diff` — re-download even if the manifest matches, but only archives that differ by SHA
+- `--recheck` — skip the manifest ID cache and re-check for changed archives (only downloads archives with different SHAs)
+- `--force` — re-download all archives regardless of manifest ID or SHA differences
 
 **Key features:**
 - Compares the latest depot manifest ID against `static/manifestId.txt` to skip unnecessary downloads

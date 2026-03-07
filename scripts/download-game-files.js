@@ -71,7 +71,7 @@ function getRequiredVPKFiles(vpkDir) {
 
                 const archiveIndex = vpkDir.tree[fileName].archiveIndex;
 
-                const fileShaIsDifferent = fileShaContentDiff[archiveIndex.toString().padStart(3, "0")] || process.argv[4] === '--ignore-manifest-diff';
+                const fileShaIsDifferent = fileShaContentDiff[archiveIndex.toString().padStart(3, "0")] || process.argv[4] === '--force';
 
                 if (!requiredIndices.includes(archiveIndex) && fileShaIsDifferent) {
                     requiredIndices.push(archiveIndex);
@@ -222,7 +222,7 @@ user.once("loggedOn", async () => {
         }
     }
 
-    if (existingManifestId == latestManifestId && process.argv[4] !== '--force' && process.argv[4] !== '--ignore-manifest-diff') {
+    if (existingManifestId == latestManifestId && process.argv[4] !== '--recheck' && process.argv[4] !== '--force') {
         console.log("⚠️ Latest manifest ID matches existing manifest ID, exiting.");
         process.exit(0);
     }
