@@ -6,13 +6,13 @@ on:
 
   workflow_dispatch:
     inputs:
-      force:
-        description: "Force download (ignore existing files)"
+      recheck:
+        description: "Skip manifest ID cache and re-check for changed archives"
         required: false
         default: false
         type: boolean
-      ignore_manifest_diff:
-        description: "Ignore manifest diff"
+      force:
+        description: "Force re-download of all archives regardless of SHA"
         required: false
         default: false
         type: boolean
@@ -37,7 +37,7 @@ jobs:
           git config --global user.email "actions@github.com"
           git pull origin main
       - name: Download new game files
-        run: npm install && node scripts/download-game-files.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.force && '--force' || inputs.ignore_manifest_diff && '--ignore-manifest-diff' || '' }}
+        run: npm install && node scripts/download-game-files.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.force && '--force' || inputs.recheck && '--recheck' || '' }}
       - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 11.1
         run: |
           if [ -f "./temp/pak01_dir.vpk" ]; then
