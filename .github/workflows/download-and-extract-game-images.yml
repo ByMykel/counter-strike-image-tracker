@@ -1,8 +1,8 @@
 name: Download and Extract Game Images
 
 on:
-  schedule:
-    - cron: "0 * * * *"
+  repository_dispatch:
+    types: [game-files-updated]
 
   workflow_dispatch:
     inputs:
@@ -62,3 +62,10 @@ jobs:
           commit_message: "manifest ${{ steps.manifestId.outputs.content }}"
       - name: Cleanup temp directory
         run: rm -rf ./temp
+
+      - name: Trigger CSGO-API update
+        run: |
+          gh api repos/ByMykel/CSGO-API/dispatches \
+            -f event_type=game-images-updated
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
