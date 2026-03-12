@@ -52,6 +52,7 @@ class CDNImageScraper {
 		this.refetchAll = refetchAll;
 		this.query = query.toLowerCase();
 		this.type = type;
+		this.updatedCount = 0;
 	}
 
 	// Load existing image URLs from file
@@ -59,7 +60,6 @@ class CDNImageScraper {
 		if (fs.existsSync(this.outputPath)) {
 			const data = fs.readFileSync(this.outputPath);
 			this.existingImageUrls = JSON.parse(data);
-			console.log(`[INFO] Already have ${Object.keys(this.existingImageUrls).length} image URLs in ${CONFIG.OUTPUT_FILE}`);
 		}
 	}
 
@@ -98,28 +98,27 @@ class CDNImageScraper {
 
 	// Get items that need image URL fetching (have market_hash_name)
 	getItemsToProcess(items) {
-		return items.filter(item => {
-			// Skip items without market_hash_name
-			if (!item.market_hash_name) {
-				return false;
-			}
+		// Apply query filter first and log matches
+		let candidates = items.filter(item => item.market_hash_name);
 
-			// Apply query filter
-			if (this.query && !item.market_hash_name.toLowerCase().includes(this.query)) {
-				return false;
-			}
+		if (this.query) {
+			candidates = candidates.filter(item =>
+				item.market_hash_name.toLowerCase().includes(this.query)
+			);
+			console.log(`[INFO] Found ${candidates.length} items matching query "${this.query}":`);
+			// for (const item of candidates) {
+			// 	const existingUrl = this.existingImageUrls[item.image_inventory];
+			// 	console.log(`  - ${item.market_hash_name} (${item.image_inventory}) → ${existingUrl || 'null'}`);
+			// }
+		}
 
-			const existingUrl = this.existingImageUrls[item.image_inventory];
-
+		return candidates.filter(item => {
 			if (this.refetchAll) {
-				// Re-fetch all items, but preserve static CDN URLs
-				if (existingUrl && existingUrl.includes('cdn.steamstatic.com')) {
-					return false;
-				}
 				return true;
 			}
 
 			// Default: only process items without a CDN URL
+			const existingUrl = this.existingImageUrls[item.image_inventory];
 			return !isCdnUrl(existingUrl);
 		});
 	}
@@ -129,7 +128,7 @@ class CDNImageScraper {
 		let addedCount = 0;
 
 		for (const item of items) {
-			if (!this.existingImageUrls[item.image_inventory]) {
+			if (!(item.image_inventory in this.existingImageUrls)) {
 				// Assign null initially for all items
 				this.existingImageUrls[item.image_inventory] = null;
 				addedCount++;
@@ -137,7 +136,12 @@ class CDNImageScraper {
 		}
 
 		if (addedCount > 0) {
-			console.log(`[INFO] Added ${addedCount} items to inventory`);
+			console.log(`[INFO] Added ${addedCount} items to inventory:`);
+			for (const item of items) {
+				if (this.existingImageUrls[item.image_inventory] === null) {
+					console.log(`  - ${item.market_hash_name || item.name} (${item.image_inventory})`);
+				}
+			}
 		}
 
 		return addedCount;
@@ -199,6 +203,7 @@ class CDNImageScraper {
 				const imageUrl = await this.fetchImageUrl(item.market_hash_name);
 				if (imageUrl) {
 					this.existingImageUrls[item.image_inventory] = imageUrl;
+					this.updatedCount++;
 				}
 			} catch (error) {
 				console.log(`Error processing ${item.market_hash_name}:`, error);
@@ -209,9 +214,12 @@ class CDNImageScraper {
 			}
 
 			console.log(`[INFO] Processed item ${i + 1}/${items.length}`);
-			console.log(`[INFO] Waiting for ${CONFIG.DELAY_PER_ITEM / 1000} seconds to respect rate limit...`);
 
-			await this.delay(CONFIG.DELAY_PER_ITEM);
+			// Only delay if there are more items to process
+			if (i < items.length - 1) {
+				console.log(`[INFO] Waiting for ${CONFIG.DELAY_PER_ITEM / 1000} seconds to respect rate limit...`);
+				await this.delay(CONFIG.DELAY_PER_ITEM);
+			}
 		}
 	}
 
@@ -236,7 +244,7 @@ class CDNImageScraper {
 
 		try {
 			fs.writeFileSync(this.outputPath, JSON.stringify(orderedImageUrls, null, 4));
-			console.log(`Saved ${Object.keys(this.existingImageUrls).length} total image URLs to ${CONFIG.OUTPUT_FILE}`);
+			console.log(`[INFO] Updated ${this.updatedCount} image URLs in ${CONFIG.OUTPUT_FILE}`);
 		} catch (err) {
 			console.error("Error saving file:", err);
 		}
@@ -245,9 +253,7 @@ class CDNImageScraper {
 	// Main execution method
 	async run() {
 		try {
-			console.log("[INFO] Loading all items...");
 			const allItems = await this.getAllItems();
-			console.log(`\n[INFO] Found ${allItems.length} total items with image_inventory.`);
 
 			this.loadExistingImageUrls();
 
