@@ -36,6 +36,6 @@ jobs:
         if: steps.auto-commit.outputs.changes_detected == 'true'
         run: |
           gh api repos/ByMykel/CSGO-API/dispatches \
-            -f event_type=update-images
+            -f event_type=game-images-updated
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
