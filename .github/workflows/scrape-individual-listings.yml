@@ -63,6 +63,15 @@ jobs:
         run: node scripts/scrape-individual-listings.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }}
 
       - name: Commit & push changes
+        id: auto-commit
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "Update CDN images"
+
+      - name: Trigger CSGO-API update
+        if: steps.auto-commit.outputs.changes_detected == 'true'
+        run: |
+          gh api repos/ByMykel/CSGO-API/dispatches \
+            -f event_type=update-images
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}

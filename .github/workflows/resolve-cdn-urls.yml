@@ -27,6 +27,15 @@ jobs:
         run: node scripts/resolve-cdn-urls.js
 
       - name: Commit & push changes
+        id: auto-commit
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "Update static CDN URLs"
+
+      - name: Trigger CSGO-API update
+        if: steps.auto-commit.outputs.changes_detected == 'true'
+        run: |
+          gh api repos/ByMykel/CSGO-API/dispatches \
+            -f event_type=update-images
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
