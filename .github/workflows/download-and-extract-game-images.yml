@@ -57,7 +57,7 @@ jobs:
         with:
           path: ./static/manifestId.txt
       - name: Commit & push changes
-        uses: stefanzweifel/git-auto-commit-action@v4
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "manifest ${{ steps.manifestId.outputs.content }}"
       - name: Cleanup temp directory
