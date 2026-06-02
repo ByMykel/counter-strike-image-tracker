@@ -3,7 +3,10 @@ const fs = require("fs");
 const path = require("path");
 const { cleanupLocalImages, isCdnUrl } = require("./utils");
 
-// Parse command line arguments
+function escapeRegExp(str) {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // Usage: node scripts/scrape-individual-listings.js <username> <password> [--all] [--query <query>] [--type <type>]
 const args = process.argv.slice(2);
 const USERNAME = args[0];
@@ -15,7 +18,6 @@ const QUERY = QUERY_INDEX !== -1 ? flags[QUERY_INDEX + 1] || '' : '';
 const TYPE_INDEX = flags.indexOf('--type');
 const TYPE = TYPE_INDEX !== -1 ? flags[TYPE_INDEX + 1] || '' : '';
 
-// Configuration constants
 const CONFIG = {
 	STATIC_DIR: path.join(__dirname, "..", "static"),
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
@@ -26,7 +28,6 @@ const CONFIG = {
 	OUTPUT_FILE: "images.json"
 };
 
-// Input validation
 function validateInput() {
 	if (!USERNAME || !PASSWORD) {
 		console.error("Usage: node scripts/scrape-individual-listings.js <username> <password> [--all] [--query <query>]");
@@ -34,14 +35,12 @@ function validateInput() {
 	}
 }
 
-// Ensure static directory exists
 function ensureStaticDir() {
 	if (!fs.existsSync(CONFIG.STATIC_DIR)) {
 		fs.mkdirSync(CONFIG.STATIC_DIR);
 	}
 }
 
-// CDN image scraper class to find and track image URLs
 class CDNImageScraper {
 	constructor({ refetchAll = false, query = '', type = '' } = {}) {
 		this.community = new SteamCommunity();
@@ -53,9 +52,13 @@ class CDNImageScraper {
 		this.query = query.toLowerCase();
 		this.type = type;
 		this.updatedCount = 0;
+		// market_hash_name -> image_inventory, for opportunistic harvesting.
+		this.mhnToInventory = new Map();
+		// image_inventory keys already resolved this run, so we don't refetch a page
+		// whose variants we've already harvested.
+		this.resolvedThisRun = new Set();
 	}
 
-	// Load existing image URLs from file
 	loadExistingImageUrls() {
 		if (fs.existsSync(this.outputPath)) {
 			const data = fs.readFileSync(this.outputPath);
@@ -63,14 +66,13 @@ class CDNImageScraper {
 		}
 	}
 
-	// Fetch all items from API
-	async getAllItems() {
-		const type = this.type === 'skins' ? 'skins_not_grouped' : this.type;
+	async getAllItems(typeFilter = this.type) {
+		const type = typeFilter === 'skins' ? 'skins_not_grouped' : typeFilter;
 		const endpoint = type ? `${type}.json` : 'all.json';
 		const response = await fetch(`${CONFIG.ITEMS_API_BASE_URL}/${endpoint}`);
 		const data = await response.json();
 
-		// Some endpoints return arrays, others return objects
+		// Some endpoints return arrays, others return objects.
 		const items = Array.isArray(data) ? data : Object.values(data);
 
 		return items
@@ -81,13 +83,11 @@ class CDNImageScraper {
 				phase: item?.phase,
 			}))
 			.filter(item => {
-				// Only include items with image_inventory
 				if (!item.image_inventory) {
 					console.warn(`[WARNING] No 'image_inventory' for '${item.name || 'unknown'}'`);
 					return false;
 				}
 
-				// Skip items with phase
 				if (item.phase) {
 					return false;
 				}
@@ -96,9 +96,7 @@ class CDNImageScraper {
 			});
 	}
 
-	// Get items that need image URL fetching (have market_hash_name)
 	getItemsToProcess(items) {
-		// Apply query filter first and log matches
 		let candidates = items.filter(item => item.market_hash_name);
 
 		if (this.query) {
@@ -106,10 +104,6 @@ class CDNImageScraper {
 				item.market_hash_name.toLowerCase().includes(this.query)
 			);
 			console.log(`[INFO] Found ${candidates.length} items matching query "${this.query}":`);
-			// for (const item of candidates) {
-			// 	const existingUrl = this.existingImageUrls[item.image_inventory];
-			// 	console.log(`  - ${item.market_hash_name} (${item.image_inventory}) → ${existingUrl || 'null'}`);
-			// }
 		}
 
 		return candidates.filter(item => {
@@ -117,19 +111,16 @@ class CDNImageScraper {
 				return true;
 			}
 
-			// Default: only process items without a CDN URL
 			const existingUrl = this.existingImageUrls[item.image_inventory];
 			return !isCdnUrl(existingUrl);
 		});
 	}
 
-	// Add all items to the inventory file (with null for those without market_hash_name)
 	addAllItemsToInventory(items) {
 		let addedCount = 0;
 
 		for (const item of items) {
 			if (!(item.image_inventory in this.existingImageUrls)) {
-				// Assign null initially for all items
 				this.existingImageUrls[item.image_inventory] = null;
 				addedCount++;
 			}
@@ -147,8 +138,8 @@ class CDNImageScraper {
 		return addedCount;
 	}
 
-	// Fetch image URL for a specific market hash name
-	async fetchImageUrl(marketHashName) {
+	// Returns the page HTML, or null on a non-200 (and flags a rate-limit to stop the run).
+	async fetchListingHtml(marketHashName) {
 		return new Promise((resolve, reject) => {
 			const url = `${CONFIG.MARKET_BASE_URL}/listings/${CONFIG.STEAM_APP_ID}/${encodeURIComponent(marketHashName)}`;
 
@@ -158,39 +149,64 @@ class CDNImageScraper {
 					return;
 				}
 
-				try {
-					if (res.statusCode === 429) {
-						console.log("Rate limited! Stopping script.");
-						this.errorFound = true;
-						resolve(null);
-						return;
-					}
-
-					if (res.statusCode !== 200) {
-						console.log(`HTTP ${res.statusCode} for ${marketHashName}`);
-						resolve(null);
-						return;
-					}
-
-					const imageUrl = this.extractImageUrl(res.body);
-					if (!imageUrl) {
-						console.log(`No image URL found for '${url}'`);
-					}
-					resolve(imageUrl);
-				} catch (parseError) {
-					reject(parseError);
+				if (res.statusCode === 429) {
+					console.log("Rate limited! Stopping script.");
+					this.errorFound = true;
+					resolve(null);
+					return;
 				}
+
+				if (res.statusCode !== 200) {
+					console.log(`HTTP ${res.statusCode} for ${marketHashName}`);
+					resolve(null);
+					return;
+				}
+
+				resolve(res.body);
 			});
 		});
 	}
 
-	// Extract image URL from HTML response
-	extractImageUrl(html) {
-		const imageMatch = html.match(/economy\/image\/([^"'\s\/]+)/);
-		return imageMatch ? `https://community.akamai.steamstatic.com/economy/image/${imageMatch[1]}` : null;
+	// A grouped page embeds every variant it shows (a skin's exteriors, a sticker and
+	// its slab, sidebar items, ...) as an object with an `icon_url` followed by its
+	// `market_hash_name`. Harvesting all of them resolves many items per request.
+	// Backslash-escaping varies in depth, so tolerate any run of backslashes.
+	extractAllImages(html) {
+		const re = /icon_url\\*":\\*"([A-Za-z0-9_-]+)[\s\S]*?market_hash_name\\*":\\*"([\s\S]*?)\\*"/g;
+		const images = new Map();
+		let m;
+		while ((m = re.exec(html)) !== null) {
+			const marketHashName = m[2];
+			if (!images.has(marketHashName)) {
+				images.set(marketHashName, m[1]);
+			}
+		}
+		return images;
 	}
 
-	// Process items with rate limiting
+	shouldUpdate(imageInventory) {
+		if (this.refetchAll) {
+			return true;
+		}
+		return !isCdnUrl(this.existingImageUrls[imageInventory]);
+	}
+
+	// Apply harvested images to any items we still need, keyed by market_hash_name.
+	applyHarvestedImages(images) {
+		let applied = 0;
+		for (const [marketHashName, hash] of images) {
+			const imageInventory = this.mhnToInventory.get(marketHashName);
+			if (!imageInventory || this.resolvedThisRun.has(imageInventory) || !this.shouldUpdate(imageInventory)) {
+				continue;
+			}
+			this.existingImageUrls[imageInventory] = `https://community.akamai.steamstatic.com/economy/image/${hash}`;
+			this.resolvedThisRun.add(imageInventory);
+			this.updatedCount++;
+			applied++;
+		}
+		return applied;
+	}
+
 	async processItems(items) {
 		for (let i = 0; i < items.length; i++) {
 			if (this.isMaxDurationReached()) {
@@ -199,11 +215,23 @@ class CDNImageScraper {
 			}
 
 			const item = items[i];
+
+			// Already filled by a previous page's harvest — no request needed.
+			if (this.resolvedThisRun.has(item.image_inventory) || !this.shouldUpdate(item.image_inventory)) {
+				console.log(`[INFO] ${item.market_hash_name} already resolved this run; skipping request (${i + 1}/${items.length})`);
+				continue;
+			}
+
+			let madeRequest = false;
 			try {
-				const imageUrl = await this.fetchImageUrl(item.market_hash_name);
-				if (imageUrl) {
-					this.existingImageUrls[item.image_inventory] = imageUrl;
-					this.updatedCount++;
+				const html = await this.fetchListingHtml(item.market_hash_name);
+				if (html) {
+					madeRequest = true;
+					const applied = this.applyHarvestedImages(this.extractAllImages(html));
+					console.log(`[INFO] Harvested ${applied} image(s) from '${item.market_hash_name}'`);
+					if (!isCdnUrl(this.existingImageUrls[item.image_inventory])) {
+						console.log(`[WARNING] No image found for '${item.market_hash_name}' on its own page`);
+					}
 				}
 			} catch (error) {
 				console.log(`Error processing ${item.market_hash_name}:`, error);
@@ -215,25 +243,22 @@ class CDNImageScraper {
 
 			console.log(`[INFO] Processed item ${i + 1}/${items.length}`);
 
-			// Only delay if there are more items to process
-			if (i < items.length - 1) {
+			// Only delay if we actually hit the network and more items remain.
+			if (madeRequest && i < items.length - 1) {
 				console.log(`[INFO] Waiting for ${CONFIG.DELAY_PER_ITEM / 1000} seconds to respect rate limit...`);
 				await this.delay(CONFIG.DELAY_PER_ITEM);
 			}
 		}
 	}
 
-	// Check if max duration has been reached
 	isMaxDurationReached() {
 		return Date.now() - this.startTime >= CONFIG.MAX_DURATION;
 	}
 
-	// Utility delay function
 	delay(ms) {
 		return new Promise(resolve => setTimeout(resolve, ms));
 	}
 
-	// Save image URLs to file
 	saveImageUrls() {
 		const orderedImageUrls = Object.keys(this.existingImageUrls)
 			.sort()
@@ -250,17 +275,24 @@ class CDNImageScraper {
 		}
 	}
 
-	// Main execution method
 	async run() {
 		try {
 			const allItems = await this.getAllItems();
 
 			this.loadExistingImageUrls();
 
-			// Add all items to inventory (with null values)
+			// Build the harvest map from the full catalog (not the --type subset) so a
+			// page resolves siblings across types too — a slab page also fills the
+			// sticker (and vice versa), and any exterior fills the others.
+			const catalog = this.type ? await this.getAllItems('') : allItems;
+			for (const item of catalog) {
+				if (item.market_hash_name) {
+					this.mhnToInventory.set(item.market_hash_name, item.image_inventory);
+				}
+			}
+
 			this.addAllItemsToInventory(allItems);
 
-			// Get items that need image URL fetching (only those with market_hash_name)
 			const itemsToProcess = this.getItemsToProcess(allItems);
 
 			if (itemsToProcess.length > 0) {
@@ -276,7 +308,6 @@ class CDNImageScraper {
 		}
 	}
 
-	// Login to Steam community
 	login(accountName, password) {
 		return new Promise((resolve, reject) => {
 			console.log("Logging into Steam community....");
@@ -297,7 +328,6 @@ class CDNImageScraper {
 	}
 }
 
-// Main execution
 async function main() {
 	validateInput();
 	ensureStaticDir();
@@ -309,10 +339,10 @@ async function main() {
 
 	const scraper = new CDNImageScraper({ refetchAll: REFETCH_ALL, query: QUERY, type: TYPE });
 
-	// Handle Ctrl+C gracefully - save data before exiting
+	// Save data before exiting on Ctrl+C.
 	let isExiting = false;
 	const handleExit = () => {
-		if (isExiting) return; // Prevent multiple saves
+		if (isExiting) return;
 		isExiting = true;
 		console.log("\n[INFO] Interrupt received. Saving current data...");
 		scraper.saveImageUrls();
@@ -332,5 +362,4 @@ async function main() {
 	}
 }
 
-// Run the application
 main();
