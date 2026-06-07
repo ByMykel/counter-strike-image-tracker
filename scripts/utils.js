@@ -12,6 +12,13 @@ function isCdnUrl(url) {
     return url && !isRawGitHubUrl(url);
 }
 
+// The community economy CDN (community.*.steamstatic.com/economy/image/...) is the
+// preferred host. Market/app CDN urls (cdn.steamstatic.com/apps/730/icons/...) lack
+// the /economy/image/ path and are considered inferior, to be replaced.
+function isCommunityCdnUrl(url) {
+    return Boolean(url) && url.includes('/economy/image/');
+}
+
 /**
  * Removes local PNG files that have a CDN URL in images.json
  * and adds them to .gitignore. Skips raw GitHub URLs since
@@ -46,4 +53,4 @@ function cleanupLocalImages() {
     console.log(`[CLEANUP] Added to .gitignore: ${addedToGitignore}, removed files: ${removedFiles}`);
 }
 
-module.exports = { cleanupLocalImages, isRawGitHubUrl, isCdnUrl };
+module.exports = { cleanupLocalImages, isRawGitHubUrl, isCdnUrl, isCommunityCdnUrl };
