@@ -31,8 +31,9 @@ const CONFIG = {
 	STATIC_DIR: path.join(__dirname, "..", "static"),
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
 	MARKET_BASE_URL: "https://steamcommunity.com/market",
-	MAX_DURATION: 3600 * 1000 * 5.5, // 5.5 hours
+	MAX_DURATION: 3600 * 1000 * 4, // 4 hours
 	DELAY_PER_ITEM: 10 * 1000, // 10 seconds
+	SAVE_EVERY_N_ITEMS: 25, // periodic flush to disk so a hard kill loses at most N items
 	STEAM_APP_ID: 730,
 	OUTPUT_FILE: "images.json"
 };
@@ -268,6 +269,12 @@ class CDNImageScraper {
 			}
 
 			console.log(`[INFO] Processed item ${i + 1}/${items.length}`);
+
+			// Flush progress to disk periodically so a hard kill (SIGKILL / job cancel,
+			// which can't be caught) loses at most SAVE_EVERY_N_ITEMS items.
+			if (madeRequest && (i + 1) % CONFIG.SAVE_EVERY_N_ITEMS === 0) {
+				this.saveImageUrls();
+			}
 
 			// Only delay if we actually hit the network and more items remain.
 			if (madeRequest && i < items.length - 1) {
