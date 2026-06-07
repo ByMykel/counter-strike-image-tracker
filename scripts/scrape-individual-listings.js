@@ -1,7 +1,7 @@
 const SteamCommunity = require("steamcommunity");
 const fs = require("fs");
 const path = require("path");
-const { cleanupLocalImages, isCdnUrl } = require("./utils");
+const { cleanupLocalImages, isCdnUrl, isCommunityCdnUrl } = require("./utils");
 
 function escapeRegExp(str) {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -208,7 +208,13 @@ class CDNImageScraper {
 		if (this.refetchAll) {
 			return true;
 		}
-		return !isCdnUrl(this.existingImageUrls[imageInventory]);
+		const existingUrl = this.existingImageUrls[imageInventory];
+		// --non-cdn targets the community economy CDN, so a market-CDN url
+		// (cdn.steamstatic) still needs replacing — isCdnUrl would wrongly treat it as done.
+		if (this.nonCdnOnly) {
+			return !isCommunityCdnUrl(existingUrl);
+		}
+		return !isCdnUrl(existingUrl);
 	}
 
 	// Apply harvested images to any items we still need, keyed by market_hash_name.
@@ -249,7 +255,7 @@ class CDNImageScraper {
 					madeRequest = true;
 					const applied = this.applyHarvestedImages(this.extractAllImages(html));
 					console.log(`[INFO] Harvested ${applied} image(s) from '${item.market_hash_name}'`);
-					if (!isCdnUrl(this.existingImageUrls[item.image_inventory])) {
+					if (this.shouldUpdate(item.image_inventory)) {
 						console.log(`[WARNING] No image found for '${item.market_hash_name}' on its own page`);
 					}
 				}
