@@ -7,16 +7,25 @@ function escapeRegExp(str) {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Usage: node scripts/scrape-individual-listings.js <username> <password> [--all] [--query <query>] [--type <type>]
+// Usage: node scripts/scrape-individual-listings.js <username> <password> [--all | --non-cdn] [--query <query>] [--type <type>]
+// Mode (pick one, default = missing): --all re-fetch every item; --non-cdn only items whose source image is
+// not the community CDN (cdn.steamstatic or raw.githubusercontent) — community CDN is preferred;
+// default missing = stored url null/github-raw.
 const args = process.argv.slice(2);
 const USERNAME = args[0];
 const PASSWORD = args[1];
 const flags = args.slice(2);
 const REFETCH_ALL = flags.includes('--all');
+const NON_CDN_ONLY = flags.includes('--non-cdn');
 const QUERY_INDEX = flags.indexOf('--query');
 const QUERY = QUERY_INDEX !== -1 ? flags[QUERY_INDEX + 1] || '' : '';
 const TYPE_INDEX = flags.indexOf('--type');
 const TYPE = TYPE_INDEX !== -1 ? flags[TYPE_INDEX + 1] || '' : '';
+
+if (REFETCH_ALL && NON_CDN_ONLY) {
+	console.error("Error: pick only one mode — --all OR --non-cdn OR neither (missing).");
+	process.exit(1);
+}
 
 const CONFIG = {
 	STATIC_DIR: path.join(__dirname, "..", "static"),
@@ -42,13 +51,14 @@ function ensureStaticDir() {
 }
 
 class CDNImageScraper {
-	constructor({ refetchAll = false, query = '', type = '' } = {}) {
+	constructor({ refetchAll = false, nonCdnOnly = false, query = '', type = '' } = {}) {
 		this.community = new SteamCommunity();
 		this.startTime = Date.now();
 		this.errorFound = false;
 		this.existingImageUrls = {};
 		this.outputPath = path.join(CONFIG.STATIC_DIR, CONFIG.OUTPUT_FILE);
 		this.refetchAll = refetchAll;
+		this.nonCdnOnly = nonCdnOnly;
 		this.query = query.toLowerCase();
 		this.type = type;
 		this.updatedCount = 0;
@@ -81,6 +91,7 @@ class CDNImageScraper {
 				market_hash_name: item.market_hash_name,
 				image_inventory: item.original?.image_inventory,
 				phase: item?.phase,
+				image: item?.image,
 			}))
 			.filter(item => {
 				if (!item.image_inventory) {
@@ -107,6 +118,15 @@ class CDNImageScraper {
 		}
 
 		return candidates.filter(item => {
+			// Only items whose source image is not the community CDN (community CDN preferred over
+			// cdn.steamstatic / raw GitHub).
+			if (this.nonCdnOnly) {
+				return !!item.image && (
+					item.image.includes("cdn.steamstatic") ||
+					item.image.includes("raw.githubusercontent")
+				);
+			}
+
 			if (this.refetchAll) {
 				return true;
 			}
@@ -333,11 +353,12 @@ async function main() {
 	ensureStaticDir();
 
 	console.log("[INFO] Scrape Individual Listings");
-	console.log(`[INFO] Mode: ${REFETCH_ALL ? 'all (re-fetch economy CDN URLs)' : 'missing only'}`);
+	const modeLabel = NON_CDN_ONLY ? 'non-cdn (only items whose source image is not the community CDN)' : REFETCH_ALL ? 'all (re-fetch economy CDN URLs)' : 'missing only';
+	console.log(`[INFO] Mode: ${modeLabel}`);
 	if (TYPE) console.log(`[INFO] Type: ${TYPE}`);
 	if (QUERY) console.log(`[INFO] Query: "${QUERY}"`);
 
-	const scraper = new CDNImageScraper({ refetchAll: REFETCH_ALL, query: QUERY, type: TYPE });
+	const scraper = new CDNImageScraper({ refetchAll: REFETCH_ALL, nonCdnOnly: NON_CDN_ONLY, query: QUERY, type: TYPE });
 
 	// Save data before exiting on Ctrl+C.
 	let isExiting = false;
