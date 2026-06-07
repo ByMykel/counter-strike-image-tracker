@@ -14,6 +14,7 @@ on:
         options:
           - missing
           - all
+          - non-cdn
       type:
         description: 'Item type (leave empty for all types)'
         required: false
@@ -57,7 +58,7 @@ jobs:
         run: npm ci
 
       - name: Scrape individual listings
-        run: node scripts/scrape-individual-listings.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }}
+        run: node scripts/scrape-individual-listings.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.mode == 'non-cdn' && '--non-cdn' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }}
 
       - name: Commit & push changes
         id: auto-commit
