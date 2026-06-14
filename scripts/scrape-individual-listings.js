@@ -205,6 +205,38 @@ class CDNImageScraper {
 		return images;
 	}
 
+	// A grouped page only embeds g_rgAssets (icon_url) for buckets that have live
+	// listings. Buckets with no listings (e.g. a brand-new slab) still appear in the
+	// bucket list with their classid but no image. Map market_hash_name -> classid so
+	// we can resolve those via itemclasshover.
+	extractBucketClassids(html) {
+		const re = /bucket_id\\*":\\*"([\s\S]*?)\\*"[\s\S]*?classid\\*":\\*"(\d+)/g;
+		const classids = new Map();
+		let m;
+		while ((m = re.exec(html)) !== null) {
+			if (!classids.has(m[1])) {
+				classids.set(m[1], m[2]);
+			}
+		}
+		return classids;
+	}
+
+	// Resolve a single classid's icon_url via the public itemclasshover endpoint.
+	// Works even when the item has zero market listings. Returns the hash or null.
+	resolveIconByClassid(classid) {
+		return new Promise((resolve) => {
+			const url = `${CONFIG.MARKET_BASE_URL.replace('/market', '')}/economy/itemclasshover/${CONFIG.STEAM_APP_ID}/${classid}?content_only=1&l=english`;
+			this.community.request.get(url, (err, res) => {
+				if (err || !res || res.statusCode !== 200) {
+					resolve(null);
+					return;
+				}
+				const m = res.body.match(/"icon_url":"([A-Za-z0-9_-]+)"/);
+				resolve(m ? m[1] : null);
+			});
+		});
+	}
+
 	shouldUpdate(imageInventory) {
 		if (this.refetchAll) {
 			return true;
@@ -256,6 +288,22 @@ class CDNImageScraper {
 					madeRequest = true;
 					const applied = this.applyHarvestedImages(this.extractAllImages(html));
 					console.log(`[INFO] Harvested ${applied} image(s) from '${item.market_hash_name}'`);
+
+					// Fallback: the item is a bucket with no live listings, so its asset
+					// isn't embedded. Resolve its image directly from the bucket classid.
+					if (this.shouldUpdate(item.image_inventory)) {
+						const classid = this.extractBucketClassids(html).get(item.market_hash_name);
+						if (classid) {
+							const hash = await this.resolveIconByClassid(classid);
+							if (hash) {
+								this.existingImageUrls[item.image_inventory] = `https://community.akamai.steamstatic.com/economy/image/${hash}`;
+								this.resolvedThisRun.add(item.image_inventory);
+								this.updatedCount++;
+								console.log(`[INFO] Resolved '${item.market_hash_name}' via classid ${classid}`);
+							}
+						}
+					}
+
 					if (this.shouldUpdate(item.image_inventory)) {
 						console.log(`[WARNING] No image found for '${item.market_hash_name}' on its own page`);
 					}
