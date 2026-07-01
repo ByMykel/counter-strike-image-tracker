@@ -37,7 +37,14 @@ async function extractThumbnails() {
         const tournamentEventTimes = {
             'Austin 2025': 3.0,
             'Budapest 2025': 2.0,
+            'Cologne 2026': 3.5,
         }
+        // Some tournament events reuse the same videos across languages instead of
+        // shipping dedicated localized thumbnails. Skip those events for the listed
+        // language folders so we don't generate duplicate/wrong thumbnails.
+        const skipLanguageTournaments = {
+            cn: ['2025年布达佩斯'], // "Budapest 2025" (tournament_event is localized in the zh-CN feed)
+        };
         
         for (const { url, folder } of languageUrls) {
             console.log(`\nProcessing ${folder === 'ww' ? 'English' : 'Chinese'} highlights...`);
@@ -52,10 +59,18 @@ async function extractThumbnails() {
                     fs.mkdirSync(outputDir, { recursive: true });
                 }
                 
+                const skipTournaments = skipLanguageTournaments[folder] || [];
+
                 for (let i = 0; i < highlights.length; i++) {
                     const highlight = highlights[i];
-                    
+
                     try {
+                        // Skip tournaments that have no dedicated thumbnails for this language
+                        if (skipTournaments.includes(highlight.tournament_event)) {
+                            console.log(`Skipping ${i + 1}/${highlights.length}: ${highlight.name} (${folder}) - no dedicated ${folder} thumbnail for ${highlight.tournament_event}`);
+                            continue;
+                        }
+
                         const outputPath = path.join(outputDir, `${highlight.def_index}.webp`);
                         
                         // Skip if thumbnail already exists
