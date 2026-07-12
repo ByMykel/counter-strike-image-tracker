@@ -116,7 +116,8 @@ function extractVideoFrame(videoUrl, outputPath, timeInSeconds) {
             .output(outputPath)
             .outputOptions([
                 '-c:v', 'libwebp', // Use WebP codec
-                '-quality', '75', // WebP quality (0-100, 80 is good balance)
+                '-vf', 'scale=960:-1', // Downscale to 960px wide (keeps aspect) to shrink file size
+                '-quality', '72', // WebP quality (0-100)
                 '-compression_level', '6', // WebP compression level (0-6, higher = smaller but slower)
                 '-t', '1', // Limit output duration to 1 second
                 '-threads', '2' // Limit threads to prevent memory issues
