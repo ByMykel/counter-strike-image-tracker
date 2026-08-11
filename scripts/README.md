@@ -21,17 +21,21 @@ Hourly (`download-and-extract-game-images.yml`):
 3. **list-default-generated.js** — records the `default_generated` file list
 4. **register-new-images.js** — adds new images to `images.json` with raw GitHub URLs
 
+Daily (`scrape-market-search.yml`):
+
+5. **scrape-market-search.js** — upgrades raw GitHub URLs to economy CDN URLs, in bulk
+
 Weekly (`scrape-individual-listings.yml`):
 
-5. **scrape-individual-listings.js** — upgrades raw GitHub URLs to economy CDN URLs
+6. **scrape-individual-listings.js** — same upgrade, one market listing page at a time
 
 Manual (`resolve-cdn-urls.yml`):
 
-6. **resolve-cdn-urls.js** — upgrades raw GitHub URLs to static CDN URLs
+7. **resolve-cdn-urls.js** — upgrades raw GitHub URLs to static CDN URLs
 
 Manual (run locally, ~2x per year):
 
-7. **extract-highlight-thumbnails.js** — extracts thumbnail frames from Souvenir Highlight videos
+8. **extract-highlight-thumbnails.js** — extracts thumbnail frames from Souvenir Highlight videos
 
 **Note:** `utils.js` contains shared helpers used by the scripts above.
 
@@ -114,9 +118,45 @@ No flags. Runs without arguments.
 
 ---
 
+## scrape-market-search.js
+
+Fetches economy CDN URLs from the Steam Market **search** endpoint. Every search result carries the
+item's `asset_description.icon_url`, so one request resolves a whole page of items instead of one.
+No Steam login required.
+
+```bash
+node scripts/scrape-market-search.js [--all|--non-cdn] [--type <type>] [--query <query>] [--delay <ms>] [--start <n>] [--max-requests <n>] [--keep-going]
+```
+
+**Flags:**
+- `--all` — re-fetch all items, not just missing ones
+- `--non-cdn` — only items whose source image is not the community economy CDN
+- `--type <type>` — filter which items count as missing, using the same [CSGO-API](https://github.com/ByMykel/CSGO-API) endpoints as the script below
+- `--query <query>` — only scan search results for this query (e.g. `--query "Cologne 2026"`). Omit to sweep the whole market
+- `--delay <ms>` — delay between requests (default `1200`)
+- `--start <n>` — resume a sweep from this result offset
+- `--max-requests <n>` — stop after this many requests (prints the `--start` value to resume from)
+- `--keep-going` — keep scanning after every tracked item is resolved
+
+**Key features:**
+- ~10 items per request instead of 1, so a full sweep of the market (~35k listed items) takes about an hour
+- Stops early once every tracked item has an image
+- Backs off and retries on rate limits, saves progress every 100 requests
+- Falls back to the whole catalog when harvesting, so a page resolves items outside `--type` too
+
+**Limitation:** Steam's search only indexes items with at least one active listing. Brand-new or very
+rare items (a Major sticker nobody has listed yet) are invisible until someone lists one — the same
+limitation applies to their individual listing pages.
+
+**Output file:** `static/images.json`
+
+---
+
 ## scrape-individual-listings.js
 
 Fetches economy CDN URLs by visiting individual Steam Market listing pages. Requires Steam login.
+Slower than `scrape-market-search.js` (one item per request, 10s apart); useful for targeting a
+specific item whose name the search endpoint doesn't match well.
 
 ```bash
 node scripts/scrape-individual-listings.js <username> <password> [--all] [--type <type>] [--query <query>]
@@ -138,6 +178,7 @@ node scripts/scrape-individual-listings.js <username> <password> [--all] [--type
 - Max runtime of 5.5 hours (fits GitHub Actions limits)
 - Graceful shutdown on SIGINT/SIGTERM
 - Phase/doppler items are skipped
+- Items with no active listings are logged as `[INFO] No active listings` rather than a warning — their page carries no image data until someone lists one
 
 **Output file:** `static/images.json`
 

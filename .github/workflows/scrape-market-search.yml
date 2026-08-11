@@ -1,0 +1,80 @@
+name: Scrape Market Search
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # Daily at 03:00
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Which items to process'
+        required: false
+        default: 'missing'
+        type: choice
+        options:
+          - missing
+          - all
+          - non-cdn
+      type:
+        description: 'Item type (leave empty for all types)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - skins
+          - stickers
+          - sticker_slabs
+          - keychains
+          - keys
+          - collectibles
+          - agents
+          - patches
+          - graffiti
+          - music_kits
+          - crates
+      query:
+        description: 'Search query (leave empty to sweep the whole market)'
+        required: false
+        default: ''
+        type: string
+      keep_going:
+        description: 'Keep scanning after every tracked item is resolved'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  process-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 5.5 hours max
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Scrape market search
+        run: node scripts/scrape-market-search.js ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.mode == 'non-cdn' && '--non-cdn' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }} ${{ inputs.keep_going && '--keep-going' || '' }}
+
+      - name: Commit & push changes
+        id: auto-commit
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "Update CDN images"
+
+      - name: Trigger CSGO-API update
+        if: steps.auto-commit.outputs.changes_detected == 'true'
+        run: |
+          gh api repos/ByMykel/CSGO-API/dispatches \
+            -f event_type=game-images-updated
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
