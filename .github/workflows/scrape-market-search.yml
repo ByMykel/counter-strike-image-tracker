@@ -63,7 +63,7 @@ jobs:
         run: npm ci
 
       - name: Scrape market search
-        run: node scripts/scrape-market-search.js ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.mode == 'non-cdn' && '--non-cdn' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }} ${{ inputs.keep_going && '--keep-going' || '' }}
+        run: node scripts/scrape-market-search.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.mode == 'non-cdn' && '--non-cdn' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }} ${{ inputs.keep_going && '--keep-going' || '' }}
 
       - name: Commit & push changes
         id: auto-commit

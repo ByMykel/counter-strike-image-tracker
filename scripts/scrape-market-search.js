@@ -1,19 +1,34 @@
+const SteamCommunity = require("steamcommunity");
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { cleanupLocalImages, isCdnUrl, isCommunityCdnUrl } = require("./utils");
 
-// Usage: node scripts/scrape-market-search.js [--all | --non-cdn] [--query <query>] [--type <type>]
-//                                             [--delay <ms>] [--start <n>] [--max-requests <n>] [--keep-going]
+// Usage: node scripts/scrape-market-search.js [username] [password] [--all | --non-cdn] [--query <query>]
+//                                             [--type <type>] [--delay <ms>] [--start <n>]
+//                                             [--max-requests <n>] [--keep-going]
 //
 // Bulk alternative to scrape-individual-listings.js. Instead of one market listing page per item,
 // this pages the market search endpoint, which returns a batch of items per request — each with its
-// asset_description.icon_url. No Steam login required.
+// asset_description.icon_url.
+//
+// Credentials are positional, same as scrape-individual-listings.js, but optional here: the search
+// endpoint answers anonymously too. Steam's market throttling is mostly per-IP, so logging in is not
+// a hard multiplier, but authenticated requests sit in a less aggressive bucket — so the default
+// delay drops when we have a session.
 //
 // Search only indexes items that currently have at least one active listing, so brand-new or very
 // rare items (a freshly released Major sticker nobody has listed yet) are invisible here — exactly
 // like on their own listing page. They resolve on a later run once someone lists one.
-const args = process.argv.slice(2);
+const argv = process.argv.slice(2);
+
+// Credentials only when they lead the argument list; otherwise every arg is a flag and we run
+// anonymously. Keeps `node scripts/scrape-market-search.js --all` working as it always has.
+const hasCredentials = argv.length >= 2 && !argv[0].startsWith("--") && !argv[1].startsWith("--");
+const USERNAME = hasCredentials ? argv[0] : "";
+const PASSWORD = hasCredentials ? argv[1] : "";
+const args = hasCredentials ? argv.slice(2) : argv;
+
 const REFETCH_ALL = args.includes("--all");
 const NON_CDN_ONLY = args.includes("--non-cdn");
 const KEEP_GOING = args.includes("--keep-going");
@@ -40,7 +55,11 @@ const CONFIG = {
 	SEARCH_URL: "https://steamcommunity.com/market/search/render/",
 	ECONOMY_IMAGE_BASE_URL: "https://community.akamai.steamstatic.com/economy/image",
 	MAX_DURATION: 3600 * 1000 * 5, // 5 hours
-	DELAY_PER_REQUEST: Number.isNaN(DELAY_OVERRIDE) ? 1200 : DELAY_OVERRIDE, // ~1 req/s is comfortably under the rate limit
+	// ~1 req/s is comfortably under the anonymous rate limit; a logged-in session tolerates a
+	// faster cadence. --delay overrides both.
+	DELAY_ANONYMOUS: 1200,
+	DELAY_AUTHENTICATED: 700,
+	DELAY_OVERRIDE: Number.isNaN(DELAY_OVERRIDE) ? null : DELAY_OVERRIDE,
 	RATE_LIMIT_BACKOFF: 60 * 1000,
 	MAX_RETRIES: 5,
 	SAVE_EVERY_N_REQUESTS: 100,
@@ -69,6 +88,8 @@ class MarketSearchScraper {
 		this.updatedCount = 0;
 		this.requestCount = 0;
 		this.seenNames = 0;
+		// Set by login(); null means anonymous requests via plain https.
+		this.community = null;
 		// market_hash_name -> image_inventory, for the whole catalog.
 		this.mhnToInventory = new Map();
 		// image_inventory keys still waiting for an image; drains as we harvest.
@@ -155,7 +176,65 @@ class MarketSearchScraper {
 		return `${CONFIG.SEARCH_URL}?${params.toString()}`;
 	}
 
+	login(accountName, password) {
+		return new Promise((resolve, reject) => {
+			console.log("Logging into Steam community....");
+
+			const community = new SteamCommunity();
+
+			community.login({
+				accountName,
+				password,
+				disableMobile: true,
+			}, (err) => {
+				if (err) {
+					console.log("Login error:", err);
+					reject(err);
+				} else {
+					// Only now do requests go through the session's cookie jar.
+					this.community = community;
+					resolve();
+				}
+			});
+		});
+	}
+
+	get delayPerRequest() {
+		if (CONFIG.DELAY_OVERRIDE !== null) {
+			return CONFIG.DELAY_OVERRIDE;
+		}
+		return this.community ? CONFIG.DELAY_AUTHENTICATED : CONFIG.DELAY_ANONYMOUS;
+	}
+
+	// Same contract as fetchJson: never rejects, resolves { status, json } with json === null on
+	// any failure so fetchPage's retry/backoff handles it uniformly.
+	fetchJsonAuthenticated(url) {
+		return new Promise((resolve) => {
+			this.community.request.get({ url, timeout: 30000 }, (err, res) => {
+				if (err || !res) {
+					resolve({ status: 0, json: null });
+					return;
+				}
+
+				if (res.statusCode !== 200) {
+					resolve({ status: res.statusCode, json: null });
+					return;
+				}
+
+				try {
+					resolve({ status: 200, json: JSON.parse(res.body) });
+				} catch (error) {
+					resolve({ status: 200, json: null });
+				}
+			});
+		});
+	}
+
 	fetchJson(url) {
+		if (this.community) {
+			return this.fetchJsonAuthenticated(url);
+		}
+
 		return new Promise((resolve) => {
 			const request = https.get(url, { headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
 				let body = "";
@@ -193,7 +272,14 @@ class MarketSearchScraper {
 			}
 
 			const backoff = CONFIG.RATE_LIMIT_BACKOFF * attempt;
-			const reason = status === 429 ? "Rate limited" : `Bad response (HTTP ${status})`;
+			let reason = status === 429 ? "Rate limited" : `Bad response (HTTP ${status})`;
+
+			// A logged-in run that starts getting turned away is usually an expired session, not a
+			// throttle — worth naming, since the backoff alone won't fix it.
+			if (this.community && (status === 401 || status === 403)) {
+				reason = `${reason} — Steam session may have expired`;
+			}
+
 			console.log(`[WARNING] ${reason} at start=${start}. Retry ${attempt}/${CONFIG.MAX_RETRIES} in ${backoff / 1000}s...`);
 			await this.delay(backoff);
 		}
@@ -280,7 +366,7 @@ class MarketSearchScraper {
 			}
 
 			start += results.length;
-			await this.delay(CONFIG.DELAY_PER_REQUEST);
+			await this.delay(this.delayPerRequest);
 		}
 
 		console.log(`[INFO] Reached the --max-requests limit (${MAX_REQUESTS}). Resume with --start ${start}.`);
@@ -361,6 +447,19 @@ async function main() {
 	if (QUERY) console.log(`[INFO] Query: "${QUERY}"`);
 
 	const scraper = new MarketSearchScraper({ refetchAll: REFETCH_ALL, nonCdnOnly: NON_CDN_ONLY, query: QUERY, type: TYPE });
+
+	if (USERNAME && PASSWORD) {
+		try {
+			await scraper.login(USERNAME, PASSWORD);
+		} catch (error) {
+			// The search endpoint is public, so a failed login costs speed, not the run.
+			console.log("[WARNING] Login failed. Continuing anonymously at the slower cadence.");
+		}
+	} else {
+		console.log("[INFO] No credentials given — running anonymously. Pass <username> <password> for a faster cadence.");
+	}
+
+	console.log(`[INFO] Delay between requests: ${scraper.delayPerRequest}ms`);
 
 	// Save data before exiting on Ctrl+C.
 	let isExiting = false;

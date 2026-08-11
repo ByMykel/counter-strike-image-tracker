@@ -122,18 +122,24 @@ No flags. Runs without arguments.
 
 Fetches economy CDN URLs from the Steam Market **search** endpoint. Every search result carries the
 item's `asset_description.icon_url`, so one request resolves a whole page of items instead of one.
-No Steam login required.
 
 ```bash
-node scripts/scrape-market-search.js [--all|--non-cdn] [--type <type>] [--query <query>] [--delay <ms>] [--start <n>] [--max-requests <n>] [--keep-going]
+node scripts/scrape-market-search.js [username] [password] [--all|--non-cdn] [--type <type>] [--query <query>] [--delay <ms>] [--start <n>] [--max-requests <n>] [--keep-going]
 ```
+
+**Arguments (optional):**
+- `<username>` `<password>` — Steam credentials, positional and in that order, same as
+  `scrape-individual-listings.js`. Omit both to run anonymously. Steam throttles the market mostly
+  per-IP, so logging in is not a hard multiplier, but authenticated requests sit in a less
+  aggressive bucket — so the default delay drops from `1200`ms to `700`ms when a session is active.
+  A failed login is not fatal: the run continues anonymously at the slower cadence.
 
 **Flags:**
 - `--all` — re-fetch all items, not just missing ones
 - `--non-cdn` — only items whose source image is not the community economy CDN
 - `--type <type>` — filter which items count as missing, using the same [CSGO-API](https://github.com/ByMykel/CSGO-API) endpoints as the script below
 - `--query <query>` — only scan search results for this query (e.g. `--query "Cologne 2026"`). Omit to sweep the whole market
-- `--delay <ms>` — delay between requests (default `1200`)
+- `--delay <ms>` — delay between requests (default `1200` anonymous, `700` logged in)
 - `--start <n>` — resume a sweep from this result offset
 - `--max-requests <n>` — stop after this many requests (prints the `--start` value to resume from)
 - `--keep-going` — keep scanning after every tracked item is resolved
