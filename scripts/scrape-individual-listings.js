@@ -237,6 +237,13 @@ class CDNImageScraper {
 		});
 	}
 
+	// A listing page only embeds asset data (and bucket classids) for items that have at least
+	// one active listing. Brand-new or very rare items render an empty page, which is not a
+	// scraping failure — there is simply nothing to read until someone lists one.
+	hasNoListings(html) {
+		return /total_count\\*":\s*0\b/.test(html) && !/bucket_id/.test(html);
+	}
+
 	shouldUpdate(imageInventory) {
 		if (this.refetchAll) {
 			return true;
@@ -305,7 +312,11 @@ class CDNImageScraper {
 					}
 
 					if (this.shouldUpdate(item.image_inventory)) {
-						console.log(`[WARNING] No image found for '${item.market_hash_name}' on its own page`);
+						if (this.hasNoListings(html)) {
+							console.log(`[INFO] No active listings for '${item.market_hash_name}' — Steam has no image to give yet, retrying on a later run`);
+						} else {
+							console.log(`[WARNING] No image found for '${item.market_hash_name}' on its own page`);
+						}
 					}
 				}
 			} catch (error) {
