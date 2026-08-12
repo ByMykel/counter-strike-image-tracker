@@ -57,8 +57,8 @@ const CONFIG = {
 	MAX_DURATION: 3600 * 1000 * 5, // 5 hours
 	// ~1 req/s is comfortably under the anonymous rate limit; a logged-in session tolerates a
 	// faster cadence. --delay overrides both.
-	DELAY_ANONYMOUS: 1200,
-	DELAY_AUTHENTICATED: 700,
+	DELAY_ANONYMOUS: 1400,
+	DELAY_AUTHENTICATED: 1400,
 	DELAY_OVERRIDE: Number.isNaN(DELAY_OVERRIDE) ? null : DELAY_OVERRIDE,
 	RATE_LIMIT_BACKOFF: 60 * 1000,
 	MAX_RETRIES: 5,
