@@ -43,6 +43,11 @@ on:
         required: false
         default: false
         type: boolean
+      authenticate:
+        description: 'Run with Steam authentication (uses USERNAME/PASSWORD secrets)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   process-images:
@@ -62,8 +67,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Anonymous by default; credentials are only passed when the run opts into authentication.
       - name: Scrape market search
-        run: node scripts/scrape-market-search.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.mode == 'non-cdn' && '--non-cdn' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }} ${{ inputs.keep_going && '--keep-going' || '' }}
+        env:
+          STEAM_USERNAME: ${{ inputs.authenticate && secrets.USERNAME || '' }}
+          STEAM_PASSWORD: ${{ inputs.authenticate && secrets.PASSWORD || '' }}
+        run: |
+          CREDENTIALS=()
+          if [ -n "$STEAM_USERNAME" ] && [ -n "$STEAM_PASSWORD" ]; then
+            CREDENTIALS=("$STEAM_USERNAME" "$STEAM_PASSWORD")
+          fi
+          node scripts/scrape-market-search.js "${CREDENTIALS[@]}" ${{ inputs.mode == 'all' && '--all' || '' }} ${{ inputs.mode == 'non-cdn' && '--non-cdn' || '' }} ${{ inputs.type && format('--type {0}', inputs.type) || '' }} ${{ inputs.query && format('--query "{0}"', inputs.query) || '' }} ${{ inputs.keep_going && '--keep-going' || '' }}
 
       - name: Commit & push changes
         id: auto-commit
