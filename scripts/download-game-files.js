@@ -23,6 +23,7 @@ const vpkFolders = [
     "panorama/images/econ/default_generated",
     "panorama/images/econ/music_kits",
     "panorama/images/econ/patches",
+    "panorama/images/econ/pets",
     "panorama/images/econ/season_icons",
     "panorama/images/econ/set_icons",
     "panorama/images/econ/status_icons",
