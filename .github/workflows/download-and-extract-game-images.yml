@@ -38,11 +38,13 @@ jobs:
           git pull origin main
       - name: Download new game files
         run: npm install && node scripts/download-game-files.js '${{ secrets.USERNAME }}' '${{ secrets.PASSWORD }}' ${{ inputs.force && '--force' || inputs.recheck && '--recheck' || '' }}
-      - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 11.1
+      - name: Run Decompiler for pak01_dir.vpk with ValveResourceFormat 21.1
         run: |
           if [ -f "./temp/pak01_dir.vpk" ]; then
-            chmod +x ./source2viewer/Source2Viewer-CLI
-            ./source2viewer/Source2Viewer-CLI -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c,vsvg_c" -d -f "panorama/images/econ" 2>/dev/null || true
+            curl -fsSL -o ./temp/s2v-cli.zip "https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/21.1/cli-linux-x64.zip"
+            unzip -oq ./temp/s2v-cli.zip -d ./temp/source2viewer
+            chmod +x ./temp/source2viewer/Source2Viewer-CLI
+            ./temp/source2viewer/Source2Viewer-CLI -i "./temp/pak01_dir.vpk" -o "./static" -e "vtex_c,vsvg_c" -d -f "panorama/images/econ" 2>/dev/null || true
             rm -f ./exceptions.txt
           else
             echo "pak01_dir.vpk not found, skipping decompilation"
