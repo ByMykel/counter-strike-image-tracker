@@ -52,7 +52,10 @@ if (REFETCH_ALL && NON_CDN_ONLY) {
 const CONFIG = {
 	STATIC_DIR: path.join(__dirname, "..", "static"),
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
-	SEARCH_URL: "https://steamcommunity.com/market/search/render/",
+	// Steam's rebuilt market answers search through a generic "actions" endpoint: the action name
+	// goes in `q`, its arguments as a JSON array in `qp`. The old /market/search/render/ is a 404.
+	SEARCH_URL: "https://steamcommunity.com/market/actions",
+	SEARCH_HEADERS: { "x-valve-action-type": "queryAction" },
 	ECONOMY_IMAGE_BASE_URL: "https://community.akamai.steamstatic.com/economy/image",
 	MAX_DURATION: 3600 * 1000 * 5, // 5 hours
 	// ~1 req/s is comfortably under the anonymous rate limit; a logged-in session tolerates a
@@ -159,19 +162,17 @@ class MarketSearchScraper {
 	}
 
 	buildRequestUrl(start) {
-		const params = new URLSearchParams({
-			appid: String(CONFIG.STEAM_APP_ID),
-			norender: "1",
-			search_descriptions: "0",
-			start: String(start),
-			count: String(CONFIG.REQUESTED_PAGE_SIZE),
-			sort_column: "name",
-			sort_dir: "asc",
-		});
+		const searchArgs = {
+			appid: CONFIG.STEAM_APP_ID,
+			strQuery: this.query,
+			start,
+			count: CONFIG.REQUESTED_PAGE_SIZE,
+		};
 
-		if (this.query) {
-			params.set("query", this.query);
-		}
+		const params = new URLSearchParams({
+			q: "Search",
+			qp: JSON.stringify([searchArgs]),
+		});
 
 		return `${CONFIG.SEARCH_URL}?${params.toString()}`;
 	}
@@ -210,7 +211,7 @@ class MarketSearchScraper {
 	// any failure so fetchPage's retry/backoff handles it uniformly.
 	fetchJsonAuthenticated(url) {
 		return new Promise((resolve) => {
-			this.community.request.get({ url, timeout: 30000 }, (err, res) => {
+			this.community.request.get({ url, headers: CONFIG.SEARCH_HEADERS, timeout: 30000 }, (err, res) => {
 				if (err || !res) {
 					resolve({ status: 0, json: null });
 					return;
@@ -236,7 +237,7 @@ class MarketSearchScraper {
 		}
 
 		return new Promise((resolve) => {
-			const request = https.get(url, { headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
+			const request = https.get(url, { headers: { "User-Agent": "Mozilla/5.0", ...CONFIG.SEARCH_HEADERS } }, (res) => {
 				let body = "";
 				res.on("data", chunk => (body += chunk));
 				res.on("end", () => {
@@ -267,8 +268,9 @@ class MarketSearchScraper {
 			const { status, json } = await this.fetchJson(this.buildRequestUrl(start));
 			this.requestCount++;
 
-			if (json) {
-				return json;
+			// Responses come wrapped as { data: { start, total_count, results } }.
+			if (json?.data) {
+				return json.data;
 			}
 
 			const backoff = CONFIG.RATE_LIMIT_BACKOFF * attempt;
@@ -294,23 +296,29 @@ class MarketSearchScraper {
 		let applied = 0;
 
 		for (const result of results) {
-			const marketHashName = result.hash_name || result.asset_description?.market_hash_name;
-			const iconUrl = result.asset_description?.icon_url;
+			const description = result.asset_description || {};
+			const marketHashName = description.market_hash_name || result.strHash;
+			const iconUrl = description.icon_url;
 			this.seenNames++;
 
 			if (!marketHashName || !iconUrl) {
 				continue;
 			}
 
-			const imageInventory = this.mhnToInventory.get(marketHashName);
-			if (!imageInventory || !this.shouldUpdate(imageInventory)) {
-				continue;
-			}
+			// Search groups a skin's wears into one row, but that row's market_hash_name is still
+			// one concrete wear, so only that wear's image_inventory is filled. Wears map to
+			// different images (light/medium/heavy), so never spread it to the others.
+			const inventories = this.mhnToInventory.get(marketHashName) || [];
+			for (const imageInventory of inventories) {
+				if (!this.shouldUpdate(imageInventory)) {
+					continue;
+				}
 
-			this.existingImageUrls[imageInventory] = `${CONFIG.ECONOMY_IMAGE_BASE_URL}/${iconUrl}`;
-			this.pending.delete(imageInventory);
-			this.updatedCount++;
-			applied++;
+				this.existingImageUrls[imageInventory] = `${CONFIG.ECONOMY_IMAGE_BASE_URL}/${iconUrl}`;
+				this.pending.delete(imageInventory);
+				this.updatedCount++;
+				applied++;
+			}
 		}
 
 		return applied;
@@ -406,9 +414,14 @@ class MarketSearchScraper {
 			// happens to contain still resolve.
 			const catalog = this.type ? await this.getAllItems("") : items;
 			for (const item of catalog) {
-				if (item.market_hash_name) {
-					this.mhnToInventory.set(item.market_hash_name, item.image_inventory);
+				if (!item.market_hash_name) {
+					continue;
 				}
+				// One market name can belong to several catalog entries (e.g. a knife's current
+				// and legacy image_inventory), so keep every key it should fill.
+				const inventories = this.mhnToInventory.get(item.market_hash_name) || new Set();
+				inventories.add(item.image_inventory);
+				this.mhnToInventory.set(item.market_hash_name, inventories);
 			}
 
 			this.buildPendingSet(items);
