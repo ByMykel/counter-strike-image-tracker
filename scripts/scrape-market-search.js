@@ -1,32 +1,11 @@
-const SteamCommunity = require("steamcommunity");
 const fs = require("fs");
 const path = require("path");
-const https = require("https");
 const { cleanupLocalImages, isCdnUrl, isCommunityCdnUrl } = require("./utils");
 
-// Usage: node scripts/scrape-market-search.js [username] [password] [--all | --non-cdn] [--query <query>]
-//                                             [--type <type>] [--delay <ms>] [--start <n>]
-//                                             [--max-requests <n>] [--keep-going]
-//
-// Bulk alternative to scrape-individual-listings.js. Instead of one market listing page per item,
-// this pages the market search endpoint, which returns a batch of items per request — each with its
-// asset_description.icon_url.
-//
-// Credentials are positional, same as scrape-individual-listings.js, but optional here: the search
-// endpoint answers anonymously too. Steam's market throttling is mostly per-IP, so logging in is not
-// a hard multiplier, but authenticated requests sit in a less aggressive bucket — so the default
-// delay drops when we have a session.
-//
-// Search only indexes items that currently have at least one active listing, so brand-new or very
-// rare items (a freshly released Major sticker nobody has listed yet) are invisible here — exactly
-// like on their own listing page. They resolve on a later run once someone lists one.
+// Usage: node scripts/scrape-market-search.js [username] [password] [--all | --non-cdn] [--query <query>] [--type <type>] [--delay <ms>] [--start <n>] [--max-requests <n>] [--keep-going]
 const argv = process.argv.slice(2);
 
-// Credentials only when they lead the argument list; otherwise every arg is a flag and we run
-// anonymously. Keeps `node scripts/scrape-market-search.js --all` working as it always has.
 const hasCredentials = argv.length >= 2 && !argv[0].startsWith("--") && !argv[1].startsWith("--");
-const USERNAME = hasCredentials ? argv[0] : "";
-const PASSWORD = hasCredentials ? argv[1] : "";
 const args = hasCredentials ? argv.slice(2) : argv;
 
 const REFETCH_ALL = args.includes("--all");
@@ -52,23 +31,15 @@ if (REFETCH_ALL && NON_CDN_ONLY) {
 const CONFIG = {
 	STATIC_DIR: path.join(__dirname, "..", "static"),
 	ITEMS_API_BASE_URL: "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en",
-	// Steam's rebuilt market answers search through a generic "actions" endpoint: the action name
-	// goes in `q`, its arguments as a JSON array in `qp`. The old /market/search/render/ is a 404.
 	SEARCH_URL: "https://steamcommunity.com/market/actions",
 	SEARCH_HEADERS: { "x-valve-action-type": "queryAction" },
 	ECONOMY_IMAGE_BASE_URL: "https://community.akamai.steamstatic.com/economy/image",
 	MAX_DURATION: 3600 * 1000 * 5, // 5 hours
-	// ~1 req/s is comfortably under the anonymous rate limit; a logged-in session tolerates a
-	// faster cadence. --delay overrides both.
-	DELAY_ANONYMOUS: 1400,
-	DELAY_AUTHENTICATED: 1400,
-	DELAY_OVERRIDE: Number.isNaN(DELAY_OVERRIDE) ? null : DELAY_OVERRIDE,
+	DELAY_PER_REQUEST: Number.isNaN(DELAY_OVERRIDE) ? 1400 : DELAY_OVERRIDE,
 	RATE_LIMIT_BACKOFF: 60 * 1000,
 	MAX_RETRIES: 5,
 	SAVE_EVERY_N_REQUESTS: 100,
 	STEAM_APP_ID: 730,
-	// Steam caps the page size server-side (10 at the time of writing) and ignores larger
-	// values, so treat the response's pagesize as the source of truth.
 	REQUESTED_PAGE_SIZE: 100,
 	OUTPUT_FILE: "images.json"
 };
@@ -91,11 +62,7 @@ class MarketSearchScraper {
 		this.updatedCount = 0;
 		this.requestCount = 0;
 		this.seenNames = 0;
-		// Set by login(); null means anonymous requests via plain https.
-		this.community = null;
-		// market_hash_name -> image_inventory, for the whole catalog.
 		this.mhnToInventory = new Map();
-		// image_inventory keys still waiting for an image; drains as we harvest.
 		this.pending = new Set();
 	}
 
@@ -138,7 +105,6 @@ class MarketSearchScraper {
 		return !isCdnUrl(existingUrl);
 	}
 
-	// Items we still want an image for, so we can report progress and stop early once done.
 	buildPendingSet(items) {
 		for (const item of items) {
 			if (!item.market_hash_name) {
@@ -177,110 +143,39 @@ class MarketSearchScraper {
 		return `${CONFIG.SEARCH_URL}?${params.toString()}`;
 	}
 
-	login(accountName, password) {
-		return new Promise((resolve, reject) => {
-			console.log("Logging into Steam community....");
-
-			const community = new SteamCommunity();
-
-			community.login({
-				accountName,
-				password,
-				disableMobile: true,
-			}, (err) => {
-				if (err) {
-					console.log("Login error:", err);
-					reject(err);
-				} else {
-					// Only now do requests go through the session's cookie jar.
-					this.community = community;
-					resolve();
-				}
+	// steamcommunity's request client gets 429 here even when fetch gets 200.
+	async fetchJson(url) {
+		try {
+			const res = await fetch(url, {
+				headers: { "User-Agent": "Mozilla/5.0", ...CONFIG.SEARCH_HEADERS },
+				signal: AbortSignal.timeout(30000),
 			});
-		});
-	}
 
-	get delayPerRequest() {
-		if (CONFIG.DELAY_OVERRIDE !== null) {
-			return CONFIG.DELAY_OVERRIDE;
+			if (res.status !== 200) {
+				return { status: res.status, json: null };
+			}
+
+			try {
+				return { status: 200, json: await res.json() };
+			} catch (error) {
+				return { status: 200, json: null };
+			}
+		} catch (error) {
+			return { status: 0, json: null };
 		}
-		return this.community ? CONFIG.DELAY_AUTHENTICATED : CONFIG.DELAY_ANONYMOUS;
 	}
 
-	// Same contract as fetchJson: never rejects, resolves { status, json } with json === null on
-	// any failure so fetchPage's retry/backoff handles it uniformly.
-	fetchJsonAuthenticated(url) {
-		return new Promise((resolve) => {
-			this.community.request.get({ url, headers: CONFIG.SEARCH_HEADERS, timeout: 30000 }, (err, res) => {
-				if (err || !res) {
-					resolve({ status: 0, json: null });
-					return;
-				}
-
-				if (res.statusCode !== 200) {
-					resolve({ status: res.statusCode, json: null });
-					return;
-				}
-
-				try {
-					resolve({ status: 200, json: JSON.parse(res.body) });
-				} catch (error) {
-					resolve({ status: 200, json: null });
-				}
-			});
-		});
-	}
-
-	fetchJson(url) {
-		if (this.community) {
-			return this.fetchJsonAuthenticated(url);
-		}
-
-		return new Promise((resolve) => {
-			const request = https.get(url, { headers: { "User-Agent": "Mozilla/5.0", ...CONFIG.SEARCH_HEADERS } }, (res) => {
-				let body = "";
-				res.on("data", chunk => (body += chunk));
-				res.on("end", () => {
-					if (res.statusCode !== 200) {
-						resolve({ status: res.statusCode, json: null });
-						return;
-					}
-					try {
-						resolve({ status: 200, json: JSON.parse(body) });
-					} catch (error) {
-						resolve({ status: 200, json: null });
-					}
-				});
-			});
-
-			request.on("error", () => resolve({ status: 0, json: null }));
-			request.setTimeout(30000, () => {
-				request.destroy();
-				resolve({ status: 0, json: null });
-			});
-		});
-	}
-
-	// Retries rate limits and transient failures with a growing backoff. Returns null when
-	// the page can't be fetched, which ends the run.
 	async fetchPage(start) {
 		for (let attempt = 1; attempt <= CONFIG.MAX_RETRIES; attempt++) {
 			const { status, json } = await this.fetchJson(this.buildRequestUrl(start));
 			this.requestCount++;
 
-			// Responses come wrapped as { data: { start, total_count, results } }.
 			if (json?.data) {
 				return json.data;
 			}
 
 			const backoff = CONFIG.RATE_LIMIT_BACKOFF * attempt;
-			let reason = status === 429 ? "Rate limited" : `Bad response (HTTP ${status})`;
-
-			// A logged-in run that starts getting turned away is usually an expired session, not a
-			// throttle — worth naming, since the backoff alone won't fix it.
-			if (this.community && (status === 401 || status === 403)) {
-				reason = `${reason} — Steam session may have expired`;
-			}
+			const reason = status === 429 ? "Rate limited" : `Bad response (HTTP ${status})`;
 
 			console.log(`[WARNING] ${reason} at start=${start}. Retry ${attempt}/${CONFIG.MAX_RETRIES} in ${backoff / 1000}s...`);
 			await this.delay(backoff);
@@ -290,8 +185,6 @@ class MarketSearchScraper {
 		return null;
 	}
 
-	// A search result carries the item's asset_description, so every row is a free image —
-	// including rows we weren't looking for.
 	applyResults(results) {
 		let applied = 0;
 
@@ -305,9 +198,7 @@ class MarketSearchScraper {
 				continue;
 			}
 
-			// Search groups a skin's wears into one row, but that row's market_hash_name is still
-			// one concrete wear, so only that wear's image_inventory is filled. Wears map to
-			// different images (light/medium/heavy), so never spread it to the others.
+			// Each wear has its own image, so only fill this row's exact wear.
 			const inventories = this.mhnToInventory.get(marketHashName) || [];
 			for (const imageInventory of inventories) {
 				if (!this.shouldUpdate(imageInventory)) {
@@ -374,7 +265,7 @@ class MarketSearchScraper {
 			}
 
 			start += results.length;
-			await this.delay(this.delayPerRequest);
+			await this.delay(CONFIG.DELAY_PER_REQUEST);
 		}
 
 		console.log(`[INFO] Reached the --max-requests limit (${MAX_REQUESTS}). Resume with --start ${start}.`);
@@ -410,15 +301,11 @@ class MarketSearchScraper {
 
 			this.loadExistingImageUrls();
 
-			// Harvest against the full catalog (not the --type subset) so unrelated rows a page
-			// happens to contain still resolve.
 			const catalog = this.type ? await this.getAllItems("") : items;
 			for (const item of catalog) {
 				if (!item.market_hash_name) {
 					continue;
 				}
-				// One market name can belong to several catalog entries (e.g. a knife's current
-				// and legacy image_inventory), so keep every key it should fill.
 				const inventories = this.mhnToInventory.get(item.market_hash_name) || new Set();
 				inventories.add(item.image_inventory);
 				this.mhnToInventory.set(item.market_hash_name, inventories);
@@ -461,18 +348,7 @@ async function main() {
 
 	const scraper = new MarketSearchScraper({ refetchAll: REFETCH_ALL, nonCdnOnly: NON_CDN_ONLY, query: QUERY, type: TYPE });
 
-	if (USERNAME && PASSWORD) {
-		try {
-			await scraper.login(USERNAME, PASSWORD);
-		} catch (error) {
-			// The search endpoint is public, so a failed login costs speed, not the run.
-			console.log("[WARNING] Login failed. Continuing anonymously at the slower cadence.");
-		}
-	} else {
-		console.log("[INFO] No credentials given — running anonymously. Pass <username> <password> for a faster cadence.");
-	}
-
-	console.log(`[INFO] Delay between requests: ${scraper.delayPerRequest}ms`);
+	console.log(`[INFO] Delay between requests: ${CONFIG.DELAY_PER_REQUEST}ms`);
 
 	// Save data before exiting on Ctrl+C.
 	let isExiting = false;

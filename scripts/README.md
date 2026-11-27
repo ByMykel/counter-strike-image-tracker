@@ -27,7 +27,7 @@ Daily (`scrape-market-search.yml`):
 
 Weekly (`scrape-individual-listings.yml`):
 
-6. **scrape-individual-listings.js** — same upgrade, one market listing page at a time
+6. **scrape-individual-listings.js** — same upgrade, one item at a time (resolves every wear)
 
 Manual (`resolve-cdn-urls.yml`):
 
@@ -127,19 +127,15 @@ item's `asset_description.icon_url`, so one request resolves a whole page of ite
 node scripts/scrape-market-search.js [username] [password] [--all|--non-cdn] [--type <type>] [--query <query>] [--delay <ms>] [--start <n>] [--max-requests <n>] [--keep-going]
 ```
 
-**Arguments (optional):**
-- `<username>` `<password>` — Steam credentials, positional and in that order, same as
-  `scrape-individual-listings.js`. Omit both to run anonymously. Steam throttles the market mostly
-  per-IP, so logging in is not a hard multiplier, but authenticated requests sit in a less
-  aggressive bucket — so the default delay drops from `1200`ms to `700`ms when a session is active.
-  A failed login is not fatal: the run continues anonymously at the slower cadence.
+**Arguments:**
+- `[username] [password]` — optional and ignored (the endpoint is public); still accepted so existing invocations keep working
 
 **Flags:**
 - `--all` — re-fetch all items, not just missing ones
 - `--non-cdn` — only items whose source image is not the community economy CDN
 - `--type <type>` — filter which items count as missing, using the same [CSGO-API](https://github.com/ByMykel/CSGO-API) endpoints as the script below
 - `--query <query>` — only scan search results for this query (e.g. `--query "Cologne 2026"`). Omit to sweep the whole market
-- `--delay <ms>` — delay between requests (default `1200` anonymous, `700` logged in)
+- `--delay <ms>` — delay between requests (default `1400`)
 - `--start <n>` — resume a sweep from this result offset
 - `--max-requests <n>` — stop after this many requests (prints the `--start` value to resume from)
 - `--keep-going` — keep scanning after every tracked item is resolved
@@ -149,6 +145,7 @@ node scripts/scrape-market-search.js [username] [password] [--all|--non-cdn] [--
 - Stops early once every tracked item has an image
 - Backs off and retries on rate limits, saves progress every 100 requests
 - Falls back to the whole catalog when harvesting, so a page resolves items outside `--type` too
+- Search groups a skin's wears into one row, so other wears' images (`_light`/`_heavy`) often only resolve via `scrape-individual-listings.js`
 
 **Limitation:** Steam's search only indexes items with at least one active listing. Brand-new or very
 rare items (a Major sticker nobody has listed yet) are invisible until someone lists one — the same
@@ -160,31 +157,36 @@ limitation applies to their individual listing pages.
 
 ## scrape-individual-listings.js
 
-Fetches economy CDN URLs by visiting individual Steam Market listing pages. Requires Steam login.
-Slower than `scrape-market-search.js` (one item per request, 10s apart); useful for targeting a
-specific item whose name the search endpoint doesn't match well.
+Fetches economy CDN URLs one item at a time through Steam Market's `QueryDescription` action
+(`/market/actions?q=QueryDescription`), which returns an exact `market_hash_name`'s description
+including `icon_url`. Steam's rebuilt listing pages render client-side and no longer embed item data,
+so the old HTML scraping is gone. Unlike `scrape-market-search.js`, this resolves every wear
+separately — search groups a skin's wears into one row, so `_light`/`_heavy` images are often only
+reachable here.
 
 ```bash
-node scripts/scrape-individual-listings.js <username> <password> [--all] [--type <type>] [--query <query>]
+node scripts/scrape-individual-listings.js [username] [password] [--all | --non-cdn] [--type <type>] [--query <query>] [--delay <ms>]
 ```
 
 **Arguments:**
-- `<username>` — Steam account username
-- `<password>` — Steam account password
+- `[username] [password]` — optional and ignored (the endpoint is public); still accepted so existing invocations keep working
 
 **Flags:**
 - `--all` — re-fetch all items, not just missing ones. Static CDN URLs are preserved.
+- `--non-cdn` — only items whose source image is not the community economy CDN
 - `--type <type>` — filter by item type using [CSGO-API](https://github.com/ByMykel/CSGO-API) endpoints: `skins`, `stickers`, `sticker_slabs`, `keychains`, `keys`, `collectibles`, `agents`, `patches`, `graffiti`, `music_kits`, `crates`
 - `--query <query>` — filter items by name (e.g. `--query "AK-47"`)
+- `--delay <ms>` — delay between requests (default `5000`)
 
 **Key features:**
 - By default, only processes items without a CDN URL (raw GitHub URLs or `null`)
-- With `--all`, re-fetches economy CDN URLs while preserving static CDN URLs
-- 10-second delay between requests to respect rate limits
-- Max runtime of 5.5 hours (fits GitHub Actions limits)
+- One request per market name; fills every `image_inventory` sharing it, and skips names whose image an earlier name already filled (StatTrak™, FN/MW sharing `_light`)
+- Requests go through Node's `fetch`: Steam answers the `steamcommunity` package's HTTP client with 429 on `/market/actions` even when the IP isn't throttled
+- Rate limits back off and retry (60s, 120s, … up to 5 attempts) instead of aborting on the first 429
+- Names Steam doesn't know (`{"data": null}`) are listed at the end of the run
+- Max runtime of 5 hours (fits GitHub Actions limits); progress flushed every 25 items
 - Graceful shutdown on SIGINT/SIGTERM
 - Phase/doppler items are skipped
-- Items with no active listings are logged as `[INFO] No active listings` rather than a warning — their page carries no image data until someone lists one
 
 **Output file:** `static/images.json`
 
